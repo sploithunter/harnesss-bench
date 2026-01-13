@@ -1,0 +1,30 @@
+id: "HELLO-01"
+name: "Hello World"
+domain: "general"
+level: 1
+language: "python"
+
+description: |
+  A simple task to create a Python hello world program.
+  This serves as a minimal example for testing harness integration.
+
+prompt_file: "TASK.md"
+
+starter_files: []
+
+target_files:
+  - "src/hello.py"
+
+verification:
+  method: "script"
+  script: "verify.py"
+  timeout_seconds: 10
+
+constraints:
+  max_iterations: 5
+  max_duration_seconds: 60
+
+metadata:
+  author: "harness-bench"
+  created: "2026-01-13"
+  tags: ["beginner", "example", "python"]
