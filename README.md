@@ -105,15 +105,23 @@ Iteration: {n}
 
 9 RTI Connext DDS tasks (7 Python, 2 C++) testing real-world middleware programming.
 
+### Via Claude Code Harness
+
+| Model | Pass Rate | Cost | Notes |
+|-------|-----------|------|-------|
+| Claude Opus 4.5 | **9/9 (100%)** | $5.35 | Only config to pass LD-07 |
+| Claude Sonnet 4.5 | **9/9 (100%)** | $5.68 | |
+| Claude Haiku 4.5 | 7/9 (77.8%) | $2.67 | |
+
 ### Via Aider Harness
 
 | Model | Pass Rate | Cost | Notes |
 |-------|-----------|------|-------|
 | Claude Haiku 4.5 | 8/9 (88.9%) | $0.55 | **Best value** |
 | Claude Sonnet 4.0 | 8/9 (88.9%) | $0.97 | |
-| Claude Opus 4.5 | 8/9 (88.9%) | $1.19 | 75% cheaper than Opus 4.0 |
+| Claude Opus 4.5 | 8/9 (88.9%) | $1.19 | |
 | Claude Opus 4.0 | 8/9 (88.9%) | $4.86 | |
-| Claude Sonnet 4.5 | 7/9 (77.8%) | $1.16 | Regression from 4.0 |
+| Claude Sonnet 4.5 | 7/9 (77.8%) | $1.16 | |
 | GPT-5.2-Codex | 6/9 (66.7%) | $1.00 | |
 
 ### Via Codex CLI Harness
@@ -124,8 +132,9 @@ Iteration: {n}
 | GPT-5.2-Codex | 4/9 (44.4%) | $1.24 | Worse than via Aider |
 
 **Key findings:**
-- All models fail LD-07 (discovery GUID mining) - hardest task
-- Haiku 4.5 matches Opus performance at 1/9th the cost
+- Claude Code harness achieves 100% with Opus/Sonnet 4.5 (only configs to pass LD-07)
+- Aider harness is more cost-effective but caps at 88.9%
+- Haiku 4.5 via Aider: best value at $0.55 for 88.9%
 - GPT-5.2-Codex performs better via Aider (66.7%) than Codex CLI (44.4%)
 
 ## Supported Harnesses
