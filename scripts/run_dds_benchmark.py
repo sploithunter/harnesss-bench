@@ -16,6 +16,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 from harness_bench.harnesses.aider import AiderRalphLoopBridge
 from harness_bench.harnesses.codex import CodexRalphLoopBridge
 from harness_bench.harnesses.claude_code import RalphLoopBridge as ClaudeRalphLoopBridge
+from harness_bench.harnesses.cursor import CursorRalphLoopBridge
 
 # 9 DDS tasks (7 Python + 2 C++)
 DDS_TASKS = [
@@ -35,7 +36,7 @@ def get_bridge_class(model: str, harness: str | None = None):
 
     Args:
         model: Model identifier (e.g., 'anthropic/claude-sonnet-4-5', 'openai/o3-mini')
-        harness: Explicit harness choice ('aider', 'codex', 'claude')
+        harness: Explicit harness choice ('aider', 'codex', 'claude', 'cursor')
 
     Returns:
         Bridge class to use
@@ -50,6 +51,8 @@ def get_bridge_class(model: str, harness: str | None = None):
             return ClaudeRalphLoopBridge
         elif harness == "aider":
             return AiderRalphLoopBridge
+        elif harness == "cursor":
+            return CursorRalphLoopBridge
         else:
             raise ValueError(f"Unknown harness: {harness}")
 
@@ -130,6 +133,7 @@ def get_harness_id(bridge_class, explicit_harness: str | None) -> str:
         "ClaudeRalphLoopBridge": "claude-code",
         "RalphLoopBridge": "claude-code",
         "AiderRalphLoopBridge": "aider",
+        "CursorRalphLoopBridge": "cursor",
     }
     return class_to_harness.get(bridge_class.__name__, "unknown")
 
@@ -147,7 +151,7 @@ def main():
     import argparse
     parser = argparse.ArgumentParser(description="Run DDS benchmark suite")
     parser.add_argument("--model", default="openai/gpt-5.2-codex", help="Model to use")
-    parser.add_argument("--harness", choices=["aider", "codex", "claude-code"], help="Harness to use (auto-detect if not specified)")
+    parser.add_argument("--harness", choices=["aider", "codex", "claude-code", "cursor"], help="Harness to use (auto-detect if not specified)")
     parser.add_argument("--workers", type=int, default=4, help="Parallel workers")
     parser.add_argument("--timeout", type=int, default=300, help="Per-task timeout")
     parser.add_argument("--max-iterations", type=int, default=10, help="Max iterations per task")

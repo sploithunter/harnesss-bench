@@ -625,3 +625,470 @@ def create_gui_bridge(
         return GenericGUIBridge(workspace, harness_name=harness_name, **kwargs)
     else:
         return PollingBridge(workspace, **kwargs)
+
+
+class CursorRalphLoopBridge(HarnessBridge):
+    """Ralph Wiggum-style while loop bridge for Cursor Agent CLI.
+
+    Uses cursor-agent CLI (released August 2025) for headless automation.
+    Semi-dumb loop that tracks state in files/git, not LLM context.
+    Each iteration gets fresh context but can see prior work via files.
+
+    Key features:
+    - No session continuation: Fresh context each iteration
+    - State in files: progress.txt, .ralph_status.json
+    - Circuit breaker: Stops on stagnation (no file changes)
+    - Simple feedback: Dumps error output for next iteration
+    - TOTAL timeout for entire test, not per iteration
+
+    Usage:
+        bridge = CursorRalphLoopBridge(workspace, verify_script="verify.py")
+        success = bridge.execute_task(task_prompt)
+    """
+
+    harness_id = "cursor"
+    harness_vendor = "cursor"
+    harness_version = "1.0.0"
+
+    # Model name mapping: our names -> Cursor CLI model strings
+    MODEL_MAP = {
+        # Claude models
+        "anthropic/claude-opus-4-5-20251101": "claude-4-opus",
+        "claude-opus-4-5-20251101": "claude-4-opus",
+        "claude-opus-4-5": "claude-4-opus",
+        "anthropic/claude-sonnet-4-5-20250929": "claude-4-sonnet",
+        "claude-sonnet-4-5-20250929": "claude-4-sonnet",
+        "claude-sonnet-4-5": "claude-4-sonnet",
+        "anthropic/claude-haiku-4-5-20251001": "claude-4-haiku",
+        "claude-haiku-4-5-20251001": "claude-4-haiku",
+        "claude-haiku-4-5": "claude-4-haiku",
+        # OpenAI models
+        "openai/gpt-5.2": "gpt-5",
+        "gpt-5.2": "gpt-5",
+        "openai/gpt-5.2-codex": "gpt-5",
+        "gpt-5.2-codex": "gpt-5",
+        # Cursor's own model
+        "composer": "composer",
+    }
+
+    def __init__(
+        self,
+        workspace: Path,
+        verify_script: Path | str | None = None,
+        model: str | None = "claude-4-sonnet",
+        max_iterations: int = 10,
+        total_timeout: int = 300,
+        stagnation_limit: int = 3,
+        verbose: bool = True,
+        verify_timeout: int = 300,
+    ):
+        """Initialize Cursor Ralph loop bridge.
+
+        Args:
+            workspace: Path to task workspace
+            verify_script: Path to verify.py
+            model: Model to use (mapped to Cursor model names)
+            max_iterations: Max loop iterations
+            total_timeout: TOTAL timeout for entire test (seconds)
+            stagnation_limit: Stop after N iterations with no file changes
+            verbose: Print real-time progress to stdout
+            verify_timeout: Timeout for verification script (seconds)
+        """
+        super().__init__(workspace, model)
+        self.verify_script = Path(verify_script).resolve() if verify_script else None
+        self.max_iterations = max_iterations
+        self.total_timeout = total_timeout
+        self.stagnation_limit = stagnation_limit
+        self.verify_timeout = verify_timeout
+        self.verbose = verbose
+        self.iteration = 0
+        self.stagnation_count = 0
+        self.last_file_hash = ""
+        self._start_time = None
+        self.total_cost_usd = 0.0
+        self._progress_log: list[str] = []
+
+        # Map model name to Cursor's model string
+        self.cursor_model = self._map_model(model)
+
+    def _map_model(self, model: str | None) -> str:
+        """Map model name to Cursor CLI model string."""
+        if not model:
+            return "claude-4-sonnet"
+
+        # Check direct mapping
+        if model in self.MODEL_MAP:
+            return self.MODEL_MAP[model]
+
+        # Check if it's already a Cursor model name
+        cursor_models = {"claude-4-sonnet", "claude-4-opus", "claude-4-haiku",
+                        "gpt-5", "composer", "sonnet-4-thinking"}
+        if model in cursor_models:
+            return model
+
+        # Fallback: try to infer from model name
+        model_lower = model.lower()
+        if "opus" in model_lower:
+            return "claude-4-opus"
+        elif "sonnet" in model_lower:
+            return "claude-4-sonnet"
+        elif "haiku" in model_lower:
+            return "claude-4-haiku"
+        elif "gpt" in model_lower:
+            return "gpt-5"
+
+        # Default
+        return "claude-4-sonnet"
+
+    def _log(self, message: str, level: str = "INFO") -> None:
+        """Log message to stdout and progress log."""
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        log_line = f"[{timestamp}] [{level}] {message}"
+        if self.verbose:
+            print(log_line, flush=True)
+        # Also append to a detailed log file
+        log_file = self.workspace / ".cursor_ralph_log.txt"
+        with open(log_file, "a") as f:
+            f.write(log_line + "\n")
+
+    def _time_remaining(self) -> float:
+        """Get seconds remaining before total timeout."""
+        if self._start_time is None:
+            return self.total_timeout
+        elapsed = time.time() - self._start_time
+        return max(0, self.total_timeout - elapsed)
+
+    def _is_timed_out(self) -> bool:
+        """Check if total timeout has been exceeded."""
+        return self._time_remaining() <= 0
+
+    def execute_task(self, task_prompt: str) -> bool:
+        """Execute with Ralph-style while loop.
+
+        State persists in files, not LLM context. Each iteration
+        starts fresh but sees prior work via git and progress files.
+
+        Uses TOTAL timeout - iterations share the time budget.
+        """
+        import json
+        import os
+        import subprocess
+
+        self._start_time = time.time()
+
+        # Initialize state files
+        self._init_state_files()
+        self._log(f"Cursor Ralph loop started: max_iterations={self.max_iterations}, total_timeout={self.total_timeout}s")
+        self._log(f"Workspace: {self.workspace}")
+        self._log(f"Verify script: {self.verify_script}")
+        self._log(f"Model: {self.model} -> Cursor model: {self.cursor_model}")
+
+        while self.iteration < self.max_iterations:
+            # Check total timeout before starting iteration
+            remaining = self._time_remaining()
+            if remaining <= 0:
+                self._log("TOTAL TIMEOUT reached", "ERROR")
+                self._progress_log.append("TIMEOUT: Total time limit reached")
+                break
+
+            self.iteration += 1
+            iter_start = time.time()
+
+            self._log(f"=== ITERATION {self.iteration}/{self.max_iterations} === (remaining: {remaining:.0f}s)")
+            self.log_event("cursor_ralph_iteration_start", {
+                "iteration": self.iteration,
+                "stagnation_count": self.stagnation_count,
+                "time_remaining": remaining,
+            })
+
+            # Build prompt with progress context embedded
+            self._log("Building prompt...")
+            prompt = self._build_ralph_prompt(task_prompt)
+            self._log(f"Prompt length: {len(prompt)} chars")
+
+            # Run Cursor with remaining time as timeout
+            self._log(f"Running Cursor Agent (timeout: {remaining:.0f}s)...")
+            cursor_start = time.time()
+            cursor_success, cursor_reason = self._run_cursor(prompt, timeout=remaining)
+            cursor_elapsed = time.time() - cursor_start
+            self._log(f"Cursor finished: {cursor_reason}, elapsed={cursor_elapsed:.1f}s")
+
+            # Commit changes
+            self._log("Checking for file changes...")
+            files_changed = self._commit_if_changed()
+            self._log(f"Files changed: {files_changed}")
+
+            # Check stagnation (circuit breaker)
+            if not files_changed:
+                self.stagnation_count += 1
+                self._log(f"No changes - stagnation count: {self.stagnation_count}/{self.stagnation_limit}", "WARN")
+                self._progress_log.append(f"No files changed (stagnation: {self.stagnation_count})")
+                if self.stagnation_count >= self.stagnation_limit:
+                    self._log("CIRCUIT BREAKER: Stopping due to stagnation", "ERROR")
+                    self.log_event("cursor_ralph_circuit_breaker", {
+                        "reason": "stagnation",
+                        "iterations_without_change": self.stagnation_count,
+                    })
+                    break
+            else:
+                self.stagnation_count = 0
+
+            # Run verification
+            if self.verify_script and self.verify_script.exists():
+                self._log("Running verification...")
+                verify_start = time.time()
+                verify_result = self._run_verification()
+                verify_elapsed = time.time() - verify_start
+                self._log(f"Verification finished: elapsed={verify_elapsed:.1f}s")
+
+                if verify_result.get("success", False):
+                    total_elapsed = time.time() - self._start_time
+                    self._log(f"VERIFICATION PASSED! Total time: {total_elapsed:.1f}s", "SUCCESS")
+                    self._progress_log.append("VERIFICATION PASSED!")
+                    self.log_event("cursor_ralph_success", {"iteration": self.iteration})
+                    return True
+
+                # Log failure details for next iteration prompt
+                error_msg = verify_result.get("message", "Unknown error")
+                self._log(f"Verification failed: {error_msg}", "WARN")
+                self._progress_log.append(f"Iteration {self.iteration} - Verification failed: {error_msg}")
+
+                # Extract checkpoints from nested structure
+                details = verify_result.get("details", {})
+                checkpoints = details.get("checkpoints", []) or verify_result.get("checkpoints", [])
+                for cp in checkpoints:
+                    if not cp.get("passed", False):
+                        cp_details = cp.get("details", {})
+                        error_info = cp_details.get("stderr", "") or cp_details.get("error", "") or cp.get("message", "")
+                        if error_info:
+                            error_info = error_info.strip()[:1500]
+                            cp_msg = f"  FAIL [{cp.get('name')}]: {error_info}"
+
+                            # Add hint for wrong DDS library imports (common hallucination)
+                            wrong_dds_libs = ["cyclonedx", "cyclone", "opendds", "fastdds", "fast_dds", "pydds"]
+                            if "ModuleNotFoundError" in error_info or "No module named" in error_info:
+                                for wrong_lib in wrong_dds_libs:
+                                    if wrong_lib in error_info.lower():
+                                        cp_msg += "\n    HINT: For RTI Connext DDS, use 'import rti.connextdds as dds'"
+                                        break
+                            if "module 'dds' has no attribute" in error_info:
+                                cp_msg += "\n    HINT: Wrong DDS import. Use 'import rti.connextdds as dds' (not 'import dds')"
+                        else:
+                            cp_msg = f"  FAIL [{cp.get('name')}]: (no details)"
+                        self._log(cp_msg, "WARN")
+                        self._progress_log.append(cp_msg)
+
+            iter_elapsed = time.time() - iter_start
+            self._log(f"Iteration {self.iteration} complete: {iter_elapsed:.1f}s, remaining: {self._time_remaining():.0f}s")
+
+        total_elapsed = time.time() - self._start_time
+        self._log(f"Cursor Ralph loop finished: iterations={self.iteration}, total_time={total_elapsed:.1f}s", "WARN")
+        self.log_event("cursor_ralph_max_iterations", {"iterations": self.iteration})
+        return False
+
+    def _init_state_files(self) -> None:
+        """Initialize Ralph state files."""
+        import json
+
+        progress_file = self.workspace / "progress.txt"
+        if not progress_file.exists():
+            progress_file.write_text("# Cursor Ralph Loop Progress\n\n")
+
+        status_file = self.workspace / ".ralph_status.json"
+        if not status_file.exists():
+            status_file.write_text(json.dumps({
+                "iteration": 0,
+                "status": "running",
+                "last_verification": None,
+            }, indent=2))
+
+    def _build_ralph_prompt(self, original_prompt: str) -> str:
+        """Build prompt with progress context embedded."""
+        parts = [original_prompt]
+
+        # Add progress log from previous iterations
+        if self._progress_log:
+            parts.append("\n\n---\n# Previous Iteration Progress\n")
+            # Only include last ~30 entries to avoid prompt bloat
+            recent_progress = self._progress_log[-30:]
+            if len(self._progress_log) > 30:
+                parts.append("(truncated earlier entries...)\n")
+            parts.append("\n".join(recent_progress))
+            parts.append("\n---\n")
+            parts.append("\nFix any issues noted above and complete the task.")
+
+        return "\n".join(parts)
+
+    def _run_cursor(self, prompt: str, timeout: float | None = None) -> tuple[bool, str]:
+        """Run Cursor Agent CLI (fresh context each time).
+
+        Args:
+            prompt: The prompt to send
+            timeout: Timeout in seconds
+
+        Returns:
+            Tuple of (success: bool, reason: str)
+        """
+        import json
+        import os
+        import signal
+        import subprocess
+
+        cmd = [
+            "cursor-agent",
+            "-p",  # Print mode (non-interactive)
+            "--force",  # Auto-approve file modifications
+            "--output-format", "json",
+            "--workspace", str(self.workspace),
+            "-m", self.cursor_model,
+            prompt,
+        ]
+
+        effective_timeout = timeout if timeout else self.total_timeout
+        self._log(f"Command: cursor-agent -p --force -m {self.cursor_model} --workspace {self.workspace} ... (timeout: {effective_timeout:.0f}s)")
+
+        try:
+            proc = subprocess.Popen(
+                cmd,
+                cwd=self.workspace,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                env=self._get_env(),
+                preexec_fn=os.setsid if os.name != 'nt' else None,
+            )
+
+            try:
+                stdout, stderr = proc.communicate(timeout=effective_timeout)
+                returncode = proc.returncode
+
+                # Try to extract stats from Cursor JSON output
+                if stdout:
+                    try:
+                        output = json.loads(stdout)
+                        stats = output.get("stats", {})
+                        lines_created = stats.get("lines_created", 0)
+                        lines_read = stats.get("lines_read", 0)
+                        duration_ms = stats.get("duration_ms", 0)
+                        self._log(f"Cursor stats: lines_created={lines_created}, lines_read={lines_read}, duration_ms={duration_ms}")
+
+                        # Estimate cost (rough estimate based on lines)
+                        # This is approximate since Cursor doesn't expose token counts
+                        estimated_tokens = (lines_read * 50) + (lines_created * 100)  # rough estimate
+                        # Use approximate pricing
+                        if "opus" in self.cursor_model:
+                            cost_per_1k = 0.015
+                        elif "sonnet" in self.cursor_model:
+                            cost_per_1k = 0.003
+                        elif "haiku" in self.cursor_model:
+                            cost_per_1k = 0.00025
+                        elif "gpt" in self.cursor_model:
+                            cost_per_1k = 0.002
+                        else:
+                            cost_per_1k = 0.003
+
+                        iteration_cost = (estimated_tokens / 1000) * cost_per_1k
+                        self.total_cost_usd += iteration_cost
+                    except json.JSONDecodeError:
+                        pass
+
+                self._log(f"Cursor exit={returncode}, estimated_cost=${self.total_cost_usd:.4f}")
+
+                if returncode != 0 and stderr:
+                    self._log(f"Stderr: {stderr[:500]}", "ERROR")
+
+                if returncode == 0:
+                    return True, "completed"
+                else:
+                    return False, f"exit_code={returncode}"
+
+            except subprocess.TimeoutExpired:
+                self._log(f"TIMEOUT after {effective_timeout:.0f}s - killing process group", "WARN")
+                if os.name != 'nt':
+                    try:
+                        os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
+                else:
+                    proc.kill()
+                proc.wait()
+                return False, "timeout"
+
+        except FileNotFoundError:
+            self._log("Cursor Agent CLI not found. Install with: curl https://cursor.com/install -fsSL | bash", "ERROR")
+            return False, "cursor_not_found"
+        except Exception as e:
+            self._log(f"Exception: {str(e)}", "ERROR")
+            return False, f"error: {str(e)}"
+
+    def _commit_if_changed(self) -> bool:
+        """Commit if there are changes. Returns True if files changed."""
+        import subprocess
+
+        try:
+            result = subprocess.run(
+                ["git", "status", "--porcelain"],
+                cwd=self.workspace,
+                capture_output=True,
+                text=True,
+            )
+            if result.stdout.strip():
+                current_hash = hash(result.stdout.strip())
+                if current_hash != self.last_file_hash:
+                    self.last_file_hash = current_hash
+                    subprocess.run(
+                        ["git", "add", "-A"],
+                        cwd=self.workspace,
+                        capture_output=True,
+                    )
+                    subprocess.run(
+                        ["git", "commit", "-m", f"[cursor-ralph] Iteration {self.iteration}"],
+                        cwd=self.workspace,
+                        capture_output=True,
+                    )
+                    return True
+            return False
+        except Exception:
+            return False
+
+    def _run_verification(self) -> dict[str, Any]:
+        """Run verification script."""
+        import json
+        import subprocess
+
+        self._log(f"Running: python {self.verify_script.name} (timeout: {self.verify_timeout}s)")
+        try:
+            result = subprocess.run(
+                ["python", str(self.verify_script), str(self.workspace)],
+                capture_output=True,
+                text=True,
+                timeout=self.verify_timeout,
+                cwd=self.workspace,
+            )
+            if result.stdout.strip():
+                parsed = json.loads(result.stdout.strip())
+                self._log(f"Verification result: success={parsed.get('success')}, score={parsed.get('score')}")
+                return parsed
+            self._log(f"No output from verify.py, stderr: {result.stderr[:200] if result.stderr else 'none'}", "ERROR")
+            return {"success": False, "message": result.stderr or "No output"}
+        except json.JSONDecodeError as e:
+            self._log(f"JSON decode error: {e}", "ERROR")
+            return {"success": False, "message": f"Invalid JSON: {str(e)}"}
+        except subprocess.TimeoutExpired:
+            self._log(f"Verification timed out after {self.verify_timeout}s", "ERROR")
+            return {"success": False, "message": "Verification timed out"}
+        except Exception as e:
+            self._log(f"Verification error: {str(e)}", "ERROR")
+            return {"success": False, "message": str(e)}
+
+    def _get_env(self) -> dict[str, str]:
+        """Get environment variables for Cursor."""
+        import os
+
+        env = os.environ.copy()
+
+        if "CURSOR_API_KEY" not in env:
+            raise ValueError("CURSOR_API_KEY not set. Get one from https://cursor.com/settings")
+
+        return env
