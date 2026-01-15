@@ -62,7 +62,7 @@ def get_bridge_class(model: str, harness: str | None = None):
     return AiderRalphLoopBridge
 
 
-def run_task(task_id: str, model: str, timeout: int = 300, harness: str | None = None) -> dict:
+def run_task(task_id: str, model: str, timeout: int = 300, harness: str | None = None, max_iterations: int = 10) -> dict:
     """Run a single task and return results."""
     base_dir = Path(__file__).parent.parent
     task_dir = base_dir / "templates/harness-bench-tasks/tasks/L2-dds" / task_id
@@ -92,7 +92,7 @@ def run_task(task_id: str, model: str, timeout: int = 300, harness: str | None =
             workspace=workspace_dir,
             verify_script=verify_script,
             model=model,
-            max_iterations=10,
+            max_iterations=max_iterations,
             total_timeout=timeout,
             stagnation_limit=3,
         )
@@ -120,23 +120,49 @@ def run_task(task_id: str, model: str, timeout: int = 300, harness: str | None =
         except:
             pass
 
+def get_harness_id(bridge_class, explicit_harness: str | None) -> str:
+    """Get standardized harness ID for results."""
+    if explicit_harness:
+        return explicit_harness
+    # Map bridge class to harness ID
+    class_to_harness = {
+        "CodexRalphLoopBridge": "codex",
+        "ClaudeRalphLoopBridge": "claude-code",
+        "RalphLoopBridge": "claude-code",
+        "AiderRalphLoopBridge": "aider",
+    }
+    return class_to_harness.get(bridge_class.__name__, "unknown")
+
+
+def normalize_model_name(model: str) -> str:
+    """Normalize model name for consistent filenames."""
+    # Remove provider prefix for cleaner names
+    if "/" in model:
+        provider, name = model.split("/", 1)
+        return name
+    return model
+
+
 def main():
     import argparse
     parser = argparse.ArgumentParser(description="Run DDS benchmark suite")
     parser.add_argument("--model", default="openai/gpt-5.2-codex", help="Model to use")
-    parser.add_argument("--harness", choices=["aider", "codex", "claude"], help="Harness to use (auto-detect if not specified)")
+    parser.add_argument("--harness", choices=["aider", "codex", "claude-code"], help="Harness to use (auto-detect if not specified)")
     parser.add_argument("--workers", type=int, default=4, help="Parallel workers")
     parser.add_argument("--timeout", type=int, default=300, help="Per-task timeout")
+    parser.add_argument("--max-iterations", type=int, default=10, help="Max iterations per task")
     parser.add_argument("--output", type=str, help="Output JSON file")
     args = parser.parse_args()
 
     # Determine which harness will be used
-    bridge_class = get_bridge_class(args.model, args.harness)
-    harness_name = bridge_class.__name__
+    # Map 'claude-code' arg to 'claude' for get_bridge_class
+    harness_arg = "claude" if args.harness == "claude-code" else args.harness
+    bridge_class = get_bridge_class(args.model, harness_arg)
+    harness_id = get_harness_id(bridge_class, args.harness)
 
     print(f"Running DDS benchmark with {args.model}")
-    print(f"Harness: {harness_name}")
-    print(f"Workers: {args.workers}, Timeout: {args.timeout}s")
+    print(f"Harness: {harness_id}")
+    print(f"Workers: {args.workers}, Timeout: {args.timeout}s, Max iterations: {args.max_iterations}")
     print(f"Tasks: {len(DDS_TASKS)}")
     print("-" * 60)
 
@@ -144,7 +170,7 @@ def main():
     start_time = time.time()
 
     with ThreadPoolExecutor(max_workers=args.workers) as executor:
-        futures = {executor.submit(run_task, task, args.model, args.timeout, args.harness): task for task in DDS_TASKS}
+        futures = {executor.submit(run_task, task, args.model, args.timeout, harness_arg, args.max_iterations): task for task in DDS_TASKS}
 
         for future in as_completed(futures):
             task_id = futures[future]
@@ -171,20 +197,32 @@ def main():
         output_path = Path(args.output)
     else:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        model_name = args.model.replace("/", "_")
-        output_path = Path(f"results/dds_benchmark_{model_name}_{timestamp}.json")
+        model_name = normalize_model_name(args.model)
+        # Standardized naming: dds_benchmark_{harness}_{model}_{timestamp}.json
+        output_path = Path(f"results/dds_benchmark_{harness_id}_{model_name}_{timestamp}.json")
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     summary = {
+        "benchmark": "dds",
+        "harness": harness_id,
+        "harness_version": getattr(bridge_class, "harness_version", "1.0.0"),
         "model": args.model,
+        "model_name": normalize_model_name(args.model),
         "timestamp": datetime.now().isoformat(),
+        "config": {
+            "timeout_s": args.timeout,
+            "max_iterations": args.max_iterations,
+            "workers": args.workers,
+        },
         "total_tasks": len(DDS_TASKS),
         "passed": passed,
+        "failed": len(results) - passed,
         "pass_rate": round(100 * passed / len(results), 1),
-        "total_elapsed": round(total_elapsed, 1),
+        "total_elapsed_s": round(total_elapsed, 1),
         "total_cost_usd": round(total_cost, 4),
-        "results": results,
+        "avg_cost_per_task_usd": round(total_cost / len(results), 4) if results else 0,
+        "tasks": results,
     }
 
     with open(output_path, "w") as f:
