@@ -1,0 +1,77 @@
+# Task Definition: Hello World Publisher (Python)
+# Level 1 - Foundational task, expected success rate >95%
+
+task_id: "L1-PY-01"
+name: "Hello World Publisher (Python)"
+description: |
+  Create a simple DDS publisher that publishes HelloWorld samples.
+  This is the most basic DDS task - tests fundamental understanding.
+
+level: 1
+language: python
+difficulty: "foundational"
+
+# Timeout and limits
+timeout_seconds: 300  # 5 minutes
+max_iterations: 30
+
+# What the model should create
+target_file: "publisher.py"
+
+# Requirements for the publisher
+requirements:
+  topic_name: "HelloWorld"
+  type_fields:
+    - name: "message"
+      type: "string"
+      max_length: 256
+    - name: "count"
+      type: "int32"
+  sample_count: 10
+  publish_rate_hz: 2  # 2 Hz = 0.5s between samples
+  domain_id: 85  # Fixed for deterministic testing
+
+# Verification
+verification:
+  method: "reference_subscriber"
+  reference_subscriber: "reference/subscriber.py"
+  expected_output: "expected/output.jsonl"
+  comparison:
+    float_tolerance: 0.0001
+    ignore_fields:
+      - "timestamp"
+
+# Checkpoints for partial credit
+checkpoints:
+  - id: "CP1_IMPORTS"
+    description: "Code imports rti.connextdds"
+    weight: 0.1
+    
+  - id: "CP2_TYPE_CREATED"
+    description: "DDS type is created correctly"
+    weight: 0.2
+    
+  - id: "CP3_RUNS"
+    description: "Publisher runs without error"
+    weight: 0.2
+    
+  - id: "CP4_PUBLISHES"
+    description: "Samples are published (spy sees them)"
+    weight: 0.2
+    
+  - id: "CP5_CORRECT_DATA"
+    description: "All samples match expected output"
+    weight: 0.3
+
+# Common failure modes to track
+failure_modes:
+  - "import_error"
+  - "type_mismatch"
+  - "domain_mismatch"
+  - "no_samples_published"
+  - "wrong_sample_count"
+  - "wrong_field_values"
+  - "timeout"
+  - "crash"
+
+

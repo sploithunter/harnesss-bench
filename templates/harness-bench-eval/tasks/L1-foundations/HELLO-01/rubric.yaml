@@ -1,0 +1,55 @@
+# Scoring Rubric for HELLO-01
+# PRIVATE - This file is in the private eval repo
+
+task_id: "HELLO-01"
+version: "1.0.0"
+
+# Scoring weights
+weights:
+  correctness: 0.8
+  efficiency: 0.1
+  style: 0.1
+
+# Correctness criteria (main score)
+correctness:
+  - criterion: "Output matches exactly"
+    points: 100
+    check: "output_exact_match"
+
+  - criterion: "Output matches (whitespace)"
+    points: 90
+    check: "output_strip_match"
+
+  - criterion: "Contains hello and world"
+    points: 50
+    check: "contains_keywords"
+
+  - criterion: "File exists"
+    points: 10
+    check: "file_exists"
+
+# Efficiency criteria
+efficiency:
+  - criterion: "Completes in < 1s"
+    points: 100
+    check: "duration_under_1s"
+
+  - criterion: "Single iteration"
+    points: 100
+    check: "iterations_eq_1"
+
+# Style criteria
+style:
+  - criterion: "No unnecessary imports"
+    points: 50
+    check: "no_imports"
+
+  - criterion: "Single print statement"
+    points: 50
+    check: "single_statement"
+
+# Bonus points (can exceed 1.0)
+bonus:
+  - criterion: "Includes shebang"
+    points: 5
+    check: "has_shebang"

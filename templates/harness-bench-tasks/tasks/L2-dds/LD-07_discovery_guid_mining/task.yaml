@@ -1,0 +1,64 @@
+name: Discovery GUID Mining
+id: LD-07
+level: 4
+category: dds_advanced
+focus: both
+description: |
+  Discover the GUIDs of remote DDS entities using the API.
+  
+  Two sub-tasks with different difficulty:
+  
+  A) Subscriber gets Publisher's GUID (easier)
+     - Use sample.info to get publication_handle
+     - Convert handle to GUID
+  
+  B) Publisher gets Subscriber's GUIDs (harder)
+     - Subscribe to built-in topics (DCPSSubscription)
+     - Find subscriptions matching your topic
+     - Extract their GUIDs
+  
+  This tests deep understanding of DDS discovery mechanisms.
+
+background: |
+  DDS participants exchange discovery information via built-in topics:
+  - DCPSParticipant: Remote participant info
+  - DCPSPublication: Remote DataWriter info  
+  - DCPSSubscription: Remote DataReader info
+  
+  This information includes GUIDs, QoS, topic names, and more.
+  It's how DDS entities discover each other.
+
+requirements:
+  task_a:
+    name: "Subscriber → Publisher GUID"
+    difficulty: L3
+    task: |
+      Create subscriber that prints the GUID of each publisher
+      it receives data from.
+    hint: "Look at sample.info.publication_handle"
+    
+  task_b:
+    name: "Publisher → Subscriber GUIDs"
+    difficulty: L4
+    task: |
+      Create publisher that discovers and prints the GUIDs of all
+      subscribers to its topic, BEFORE publishing data.
+    hint: "Subscribe to the DCPSSubscription built-in topic"
+
+verification:
+  type: guid_extraction
+  method: compare_discovered_guids
+  expected: remote_entity_guids_match
+
+constraints:
+  max_iterations: 20
+  max_tokens: 150000
+  timeout: 600
+
+rubric_focus:
+  - sample_info: "Correct use of sample info for publication handle"
+  - builtin_topics: "Correct subscription to DCPSSubscription"
+  - guid_conversion: "Proper InstanceHandle to GUID conversion"
+  - discovery_understanding: "Shows understanding of DDS discovery"
+
+

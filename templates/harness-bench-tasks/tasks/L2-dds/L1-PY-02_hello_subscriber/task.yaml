@@ -1,0 +1,33 @@
+name: Hello World Subscriber
+id: L1-PY-02
+level: 1
+language: python
+description: |
+  Create a DDS subscriber that receives samples from a "HelloWorld" topic
+  and outputs them as JSONL. CRITICAL: Must use asynchronous callbacks 
+  (WaitSet or listener pattern), NOT polling.
+
+requirements:
+  - Subscribe to "HelloWorld" topic on domain 0
+  - Use asynchronous data reception (WaitSet or on_data_available)
+  - Output received samples as JSONL to stdout
+  - Handle SIGTERM gracefully
+  - Use external QoS if provided
+
+verification:
+  type: output_comparison
+  reference_component: publisher  # We provide working publisher
+  expected_samples: 10
+  tolerance: exact_match
+
+constraints:
+  max_iterations: 10
+  max_tokens: 50000
+  timeout: 300
+
+rubric_focus:
+  - async_callbacks: "Must use WaitSet or listener, NOT polling loops with take()"
+  - jsonl_output: "Proper JSONL format with message and count fields"
+  - graceful_shutdown: "Handles SIGTERM without hanging"
+
+

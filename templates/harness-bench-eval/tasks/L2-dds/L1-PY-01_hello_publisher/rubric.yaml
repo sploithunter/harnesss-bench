@@ -1,0 +1,33 @@
+task_id: L1-PY-01
+version: 1.0.0
+weights:
+  correctness: 0.8
+  efficiency: 0.1
+  style: 0.1
+correctness:
+- criterion: Code imports rti.connextdds
+  points: 10
+  check: cp1_imports
+- criterion: DDS type is created correctly
+  points: 20
+  check: cp2_type_created
+- criterion: Publisher runs without error
+  points: 20
+  check: cp3_runs
+- criterion: Samples are published (spy sees them)
+  points: 20
+  check: cp4_publishes
+- criterion: All samples match expected output
+  points: 30
+  check: cp5_correct_data
+efficiency:
+- criterion: Completes within timeout
+  points: 100
+  check: duration_under_60s
+style:
+- criterion: Clean imports
+  points: 50
+  check: no_imports
+- criterion: Code runs without errors
+  points: 50
+  check: file_exists

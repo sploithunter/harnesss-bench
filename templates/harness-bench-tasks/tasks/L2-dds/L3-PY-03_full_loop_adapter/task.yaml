@@ -1,0 +1,45 @@
+name: Binary Protocol to DDS Bridge
+id: L3-PY-03
+level: 4
+category: dds_integration
+focus: adapter
+description: |
+  Create a bidirectional bridge between a binary protocol and DDS.
+  This tests understanding of:
+  - DynamicData API for runtime types
+  - Multiple topic handling
+  - QoS configuration for reliability
+  - Async patterns with WaitSet
+
+scenario: |
+  Legacy systems communicate via a simple binary protocol (length-prefixed JSON).
+  Need inbound adapter (binary->DDS) and outbound adapter (DDS->binary).
+
+requirements:
+  - Create inbound_adapter.py to read binary and publish to DDS
+  - Create outbound_adapter.py to subscribe to DDS and write binary
+  - Use DynamicData types for Heartbeat, Position, Command topics
+  - Use RELIABLE + TRANSIENT_LOCAL QoS
+  - Outbound adapter must use WaitSet (async pattern)
+
+verification:
+  type: round_trip
+  test_messages: 10
+
+constraints:
+  max_iterations: 15
+  max_tokens: 100000
+  timeout: 300
+
+starter_files:
+  - protocol.py
+
+target_files:
+  - inbound_adapter.py
+  - outbound_adapter.py
+
+rubric_focus:
+  - dynamicdata_usage: "Correct DynamicData type creation"
+  - topic_naming: "Exact topic names match"
+  - qos_settings: "RELIABLE + TRANSIENT_LOCAL QoS"
+  - async_pattern: "Outbound uses WaitSet, not polling"

@@ -1,0 +1,57 @@
+name: Native C++ Publisher (No Source Code)
+id: LN-CPP-01
+level: 4
+language: cpp
+description: |
+  Create a DDS publisher in C++ from scratch.
+  NO Python source code is provided - only the type specification
+  and requirements. Tests true C++ DDS expertise.
+
+requirements:
+  - Create C++ publisher for "HelloWorld" topic
+  - Use RTI Connext DDS Modern C++ API
+  - Match exact type specification (see below)
+  - Use specified QoS for interoperability
+  - Create CMakeLists.txt for building
+
+type_specification:
+  name: HelloWorld
+  members:
+    - name: message
+      type: string
+      max_length: 256
+    - name: count  
+      type: int32
+
+qos_requirements:
+  reliability: RELIABLE
+  durability: TRANSIENT_LOCAL
+  history: KEEP_ALL
+
+verification:
+  type: interop_test
+  reference_component: subscriber_python
+  expected_samples: 10
+  tolerance: exact_match
+
+constraints:
+  max_iterations: 20
+  max_tokens: 150000
+  timeout: 900
+
+files_provided:
+  - NONE (only this specification)
+
+files_expected:
+  - publisher.cxx
+  - HelloWorld.idl
+  - CMakeLists.txt
+
+rubric_focus:
+  - api_correctness: "Correct use of Modern C++ DDS API"
+  - type_definition: "IDL matches specification exactly"
+  - build_system: "CMakeLists.txt works with RTI CMake"
+  - qos_settings: "QoS compatible with Python subscriber"
+  - code_quality: "Clean, idiomatic C++ code"
+
+

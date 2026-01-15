@@ -1,0 +1,50 @@
+name: RTI DDS Gen Workflow
+id: LD-03
+level: 3
+category: dds_advanced
+focus: both  # Publisher AND Subscriber
+description: |
+  Complete workflow using rtiddsgen to generate type support from IDL.
+  This is how most production DDS systems are built.
+
+  Tests understanding of:
+  - IDL syntax
+  - rtiddsgen tool usage
+  - Using generated Python types
+  - Difference from DynamicData approach
+
+workflow:
+  1. Write IDL file defining types
+  2. Run rtiddsgen to generate Python type support
+  3. Create publisher using generated types
+  4. Create subscriber using generated types
+  5. Verify interoperability
+
+requirements:
+  - Write correct IDL file (HelloWorld.idl)
+  - Run rtiddsgen with correct options for Python
+  - Import and use generated type support
+  - Publisher and subscriber must interoperate
+
+verification:
+  type: end_to_end
+  method: publisher_subscriber_pair
+  expected_samples: 10
+
+constraints:
+  max_iterations: 20
+  max_tokens: 100000
+  timeout: 600
+
+files_expected:
+  - HelloWorld.idl
+  - publisher.py  (uses generated types)
+  - subscriber.py (uses generated types)
+
+rubric_focus:
+  - idl_syntax: "Correct IDL syntax"
+  - rtiddsgen_usage: "Correct tool invocation"
+  - generated_imports: "Proper import of generated modules"
+  - type_usage: "Correct usage of generated type API"
+
+

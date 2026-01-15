@@ -1,0 +1,4 @@
+struct HelloWorld {
+    string<256> message;
+    long count;
+};

@@ -1,0 +1,44 @@
+name: Python to C++ Publisher Translation
+id: LX-CPP-01
+level: 3
+language: cpp
+description: |
+  Translate a working Python DDS publisher to C++.
+  The Python subscriber remains unchanged and will be used to verify
+  interoperability with the translated C++ publisher.
+
+requirements:
+  - Translate the provided Python publisher to C++
+  - Use RTI Connext DDS C++ Modern API
+  - Create appropriate CMakeLists.txt
+  - Maintain exact same DDS type definition
+  - Match QoS settings for interoperability
+  - Published samples must be receivable by Python subscriber
+
+verification:
+  type: interop_test
+  reference_component: subscriber_python  # Python subscriber verifies C++ publisher
+  expected_samples: 10
+  tolerance: exact_match
+
+constraints:
+  max_iterations: 15
+  max_tokens: 100000
+  timeout: 600
+
+starter_files:
+  - subscriber.py    # Python subscriber (for interop testing)
+
+files_expected:
+  - publisher.cxx    # Translated C++ publisher
+  - HelloWorld.idl   # IDL type definition (optional, can use dynamic)
+  - CMakeLists.txt   # Complete build configuration
+
+rubric_focus:
+  - type_match: "DDS type must match Python exactly"
+  - qos_match: "QoS must be compatible (RELIABLE, TRANSIENT_LOCAL)"
+  - build_system: "CMakeLists.txt must work with RTI CMake"
+  - modern_cpp: "Use Modern C++ API, not legacy"
+  - interop: "Samples must be correctly received by Python subscriber"
+
+

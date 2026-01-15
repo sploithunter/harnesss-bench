@@ -1,0 +1,9 @@
+// HelloWorld.idl - DDS type definition
+// Must match Python type exactly for interoperability
+
+struct HelloWorld {
+    string<256> message;
+    long count;  // Maps to Python Int32
+};
+
+

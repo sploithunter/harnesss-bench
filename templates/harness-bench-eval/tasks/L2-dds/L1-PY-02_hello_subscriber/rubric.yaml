@@ -1,0 +1,18 @@
+task_id: L1-PY-02_hello_subscriber
+version: 1.0.0
+weights:
+  correctness: 0.8
+  efficiency: 0.1
+  style: 0.1
+correctness: []
+efficiency:
+- criterion: Completes within timeout
+  points: 100
+  check: duration_under_60s
+style:
+- criterion: Clean imports
+  points: 50
+  check: no_imports
+- criterion: Code runs without errors
+  points: 50
+  check: file_exists

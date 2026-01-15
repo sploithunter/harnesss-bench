@@ -1,0 +1,48 @@
+name: Late Joiner Problem (Durability Fix)
+id: LQ-01
+level: 2
+category: qos_challenge
+description: |
+  Diagnose and fix a common DDS issue: samples lost when subscriber
+  starts after publisher has already sent data.
+  
+  This is one of the most common mistakes in DDS development.
+
+scenario: |
+  You have a publisher and subscriber for sensor data.
+  In production, startup order is UNDEFINED - either could start first.
+  
+  Current problem: When subscriber starts AFTER publisher,
+  it misses all samples that were sent before it joined.
+  
+  The test randomly delays either publisher or subscriber startup
+  to simulate real-world conditions.
+
+requirements:
+  - Fix QoS so subscriber receives ALL samples regardless of startup order
+  - Do NOT add sleep() hacks or other timing workarounds
+  - Use DDS durability and reliability features
+  - Both publisher.py and subscriber.py may need changes
+
+verification:
+  type: random_startup_order
+  runs: 5  # Run 5 times with random delays
+  expected_samples: 10
+  all_runs_must_pass: true
+
+constraints:
+  max_iterations: 10
+  max_tokens: 50000
+  timeout: 300
+
+starter_files:
+  - publisher.py    # Broken - uses VOLATILE
+  - subscriber.py   # Broken - uses VOLATILE
+
+rubric_focus:
+  - durability: "Must use TRANSIENT_LOCAL on both sides"
+  - reliability: "Must use RELIABLE on both sides"
+  - no_hacks: "Must NOT use sleep() or timing workarounds"
+  - understanding: "Explanation of why fix works"
+
+

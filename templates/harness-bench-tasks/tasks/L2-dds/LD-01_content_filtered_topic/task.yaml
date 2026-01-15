@@ -1,0 +1,52 @@
+name: Content Filtered Topic Subscriber
+id: LD-01
+level: 3
+category: dds_advanced
+focus: subscriber
+description: |
+  Create a subscriber that uses ContentFilteredTopic to receive only
+  samples matching a filter expression. The filter is evaluated on
+  the publisher side, reducing network bandwidth.
+
+  This tests understanding of:
+  - ContentFilteredTopic API
+  - SQL filter expression syntax
+  - Efficient data filtering at DDS level
+
+scenario: |
+  A publisher sends sensor readings from 100 sensors (id: 1-100).
+  You only care about sensors with id > 50 AND value > 75.0.
+  
+  Without filtering: Receive all 1000 samples
+  With CFT: Receive only ~125 samples (the ones matching filter)
+
+requirements:
+  - Create ContentFilteredTopic with SQL filter expression
+  - Filter: "id > 50 AND value > 75.0"
+  - Use async pattern (WaitSet) for receiving
+  - Output matching samples as JSONL
+
+verification:
+  type: output_comparison
+  reference_component: publisher  # Sends all samples
+  expected_samples: ~125  # Only matching ones
+  verify_filter: true  # Ensure no non-matching samples received
+
+constraints:
+  max_iterations: 15
+  max_tokens: 75000
+  timeout: 300
+
+starter_files:
+  - publisher.py
+
+target_files:
+  - subscriber.py
+
+rubric_focus:
+  - cft_creation: "Correct ContentFilteredTopic API usage"
+  - filter_syntax: "Valid SQL filter expression"
+  - async_pattern: "Uses WaitSet, not polling"
+  - efficiency: "Does NOT filter in application code"
+
+

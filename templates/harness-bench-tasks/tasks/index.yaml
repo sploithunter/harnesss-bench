@@ -1,0 +1,52 @@
+# Harness-Bench Task Index
+# This file lists all available benchmark tasks.
+# Updated automatically when tasks are added or modified.
+
+version: "1.0"
+updated_at: "2026-01-14T00:00:00Z"
+
+# Task catalog
+# Each task has public metadata but no solutions/tests
+tasks:
+  - id: "HELLO-01"
+    name: "Hello World"
+    domain: "general"
+    level: 1
+    language: "python"
+    tags: ["beginner", "example"]
+    path: "L1-foundations/HELLO-01"
+    checksum: null  # Computed on release
+    version: "1.0.0"
+
+# Add more tasks here as they are created
+# Example:
+#   - id: "WEB-01"
+#     name: "Simple HTTP Server"
+#     domain: "web"
+#     level: 2
+#     language: "python"
+#     tags: ["networking", "http"]
+#     path: "L2-intermediate/WEB-01"
+
+# Available filters for registry queries
+domains:
+  - general
+  - web
+  - cli
+  - dds
+  - database
+  - api
+
+levels:
+  1: "Foundations - Basic programming tasks"
+  2: "Intermediate - Multi-file tasks with some complexity"
+  3: "Advanced - Complex tasks requiring architectural decisions"
+  4: "Expert - Production-level challenges"
+
+languages:
+  - python
+  - javascript
+  - typescript
+  - rust
+  - go
+  - java
