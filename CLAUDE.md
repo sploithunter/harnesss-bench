@@ -2,6 +2,15 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Important Guidelines
+
+**Always use the latest model versions when calling APIs directly.** Unless otherwise directed, use the most recent model releases (e.g., Claude 4.5 not Claude 4.0, GPT-5.2 not GPT-5.1). Newer models are often cheaper and more capable. Check official pricing pages before running benchmarks.
+
+Current latest Anthropic models (as of Jan 2025):
+- `anthropic/claude-sonnet-4-5-20250929` (Sonnet 4.5)
+- `anthropic/claude-opus-4-5-20251101` (Opus 4.5)
+- `anthropic/claude-haiku-4-5-20251001` (Haiku 4.5)
+
 ## Build & Development Commands
 
 ```bash

@@ -578,6 +578,13 @@ class AiderRalphLoopBridge(HarnessBridge):
                     cmd.extend(["--model-settings-file", str(codex_settings)])
                     self._log(f"Using codex model settings: {codex_settings}")
 
+            # Claude 4.5 models need custom settings (not in aider's default config yet)
+            elif "sonnet-4-5" in self.model or "opus-4-5" in self.model or "haiku-4-5" in self.model:
+                claude45_settings = Path(__file__).parent.parent.parent.parent / "config" / "claude45-model-settings.yml"
+                if claude45_settings.exists():
+                    cmd.extend(["--model-settings-file", str(claude45_settings)])
+                    self._log(f"Using Claude 4.5 model settings: {claude45_settings}")
+
         # Use --auto-test if enabled and we have a verify script
         if self.auto_test and self.verify_script and self.verify_script.exists():
             cmd.extend(["--auto-test", "--test-cmd", f"python {self.verify_script}"])
