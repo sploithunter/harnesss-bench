@@ -1,0 +1,92 @@
+# Leaderboard Update Workflow
+# Triggers when new results are pushed to the data directory.
+# Regenerates leaderboards and deploys to GitHub Pages.
+
+name: Update Leaderboard
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'data/results/**'
+  workflow_dispatch:
+  schedule:
+    # Regenerate daily at midnight UTC
+    - cron: '0 0 * * *'
+
+# Sets permissions of the GITHUB_TOKEN for GitHub Pages deployment
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Allow only one concurrent deployment
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+
+jobs:
+  aggregate:
+    name: Aggregate Results
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install pyyaml
+
+      - name: Run aggregation
+        run: python scripts/aggregate.py --data-dir ./data
+
+      - name: Commit leaderboard updates
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/leaderboards/ data/statistics/
+          git diff --staged --quiet || git commit -m "Update leaderboards [skip ci]"
+          git push
+
+  build:
+    name: Build Site
+    needs: aggregate
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: main  # Get latest after aggregate commit
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Generate static site
+        run: python scripts/generate_site.py --data-dir ./data --output-dir ./site
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./site
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

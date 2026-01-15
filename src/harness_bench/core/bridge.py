@@ -31,6 +31,7 @@ from .protocol import (
     CommitAction,
     format_commit_message,
 )
+from .submission import SubmissionClient, SubmissionConfig, SubmissionResult
 
 
 class HarnessBridge(ABC):
@@ -328,6 +329,38 @@ class HarnessBridge(ABC):
 
         with open(events_file, "a") as f:
             f.write(json.dumps(entry) + "\n")
+
+    def submit(
+        self,
+        message: str | None = None,
+        config: SubmissionConfig | None = None,
+    ) -> SubmissionResult:
+        """Submit the completed run to the submissions repository.
+
+        This pushes the workspace to the central submissions repository
+        and optionally creates a pull request for evaluation.
+
+        Args:
+            message: Optional submission message
+            config: Submission configuration
+
+        Returns:
+            SubmissionResult with status and URLs
+        """
+        client = SubmissionClient(config)
+        result = client.submit(self.workspace, message)
+
+        self.log_event(
+            "submission",
+            {
+                "success": result.success,
+                "submission_id": result.submission_id,
+                "pr_url": result.pr_url,
+                "error": result.error,
+            },
+        )
+
+        return result
 
 
 class ManualBridge(HarnessBridge):

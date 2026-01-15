@@ -53,8 +53,11 @@ openai = [
 anthropic = [
     "anthropic>=0.20",
 ]
+gui = [
+    "watchdog>=3.0",
+]
 all = [
-    "harness-bench[dev,aider,openai,anthropic]",
+    "harness-bench[dev,aider,openai,anthropic,gui]",
 ]
 
 [project.scripts]

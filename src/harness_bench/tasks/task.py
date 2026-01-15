@@ -92,7 +92,10 @@ class TaskConfig:
 
     @classmethod
     def from_yaml(cls, path: Path) -> TaskConfig:
-        """Load task config from YAML file."""
+        """Load task config from YAML file.
+
+        Supports both harness-bench format and ConnextDev benchmark format.
+        """
         with open(path) as f:
             data = yaml.safe_load(f)
 
@@ -102,19 +105,57 @@ class TaskConfig:
 
         constraints = data.get("constraints", {})
 
+        # Handle ConnextDev format (task_id) vs harness-bench format (id)
+        task_id = data.get("id") or data.get("task_id")
+        if not task_id:
+            raise ValueError("Task must have 'id' or 'task_id' field")
+
+        # Handle domain - ConnextDev uses language-based, infer domain from path or language
+        domain = data.get("domain")
+        if not domain:
+            language = data.get("language", "python")
+            if language in ("python", "cpp", "c++"):
+                # Check if it's a DDS task based on description or requirements
+                desc = data.get("description", "").lower()
+                if "dds" in desc or "connext" in desc or data.get("requirements"):
+                    domain = "dds"
+                else:
+                    domain = "general"
+            else:
+                domain = "general"
+
+        # Handle max_iterations - ConnextDev puts at top level
+        max_iterations = (
+            constraints.get("max_iterations")
+            or data.get("max_iterations")
+            or 20
+        )
+
+        # Handle timeout - ConnextDev uses timeout_seconds at top level
+        max_duration = (
+            constraints.get("max_duration_seconds")
+            or data.get("timeout_seconds")
+            or 300
+        )
+
+        # Handle target_files - ConnextDev uses target_file (singular)
+        target_files = data.get("target_files", [])
+        if not target_files and data.get("target_file"):
+            target_files = [data["target_file"]]
+
         return cls(
-            id=data["id"],
-            name=data["name"],
-            domain=data.get("domain", "general"),
+            id=task_id,
+            name=data.get("name", task_id),
+            domain=domain,
             level=data.get("level", 1),
             language=data.get("language", "python"),
             description=data.get("description", ""),
             prompt_file=data.get("prompt_file", "TASK.md"),
             starter_files=data.get("starter_files", []),
-            target_files=data.get("target_files", []),
+            target_files=target_files,
             verification=verification,
-            max_iterations=constraints.get("max_iterations", 20),
-            max_duration_seconds=constraints.get("max_duration_seconds", 300),
+            max_iterations=max_iterations,
+            max_duration_seconds=max_duration,
             metadata=data.get("metadata", {}),
         )
 
