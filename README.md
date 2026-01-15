@@ -101,13 +101,40 @@ Iteration: {n}
 }
 ```
 
+## DDS Benchmark Results (January 2026)
+
+9 RTI Connext DDS tasks (7 Python, 2 C++) testing real-world middleware programming.
+
+### Via Aider Harness
+
+| Model | Pass Rate | Cost | Notes |
+|-------|-----------|------|-------|
+| Claude Haiku 4.5 | 8/9 (88.9%) | $0.55 | **Best value** |
+| Claude Sonnet 4.0 | 8/9 (88.9%) | $0.97 | |
+| Claude Opus 4.5 | 8/9 (88.9%) | $1.19 | 75% cheaper than Opus 4.0 |
+| Claude Opus 4.0 | 8/9 (88.9%) | $4.86 | |
+| Claude Sonnet 4.5 | 7/9 (77.8%) | $1.16 | Regression from 4.0 |
+| GPT-5.2-Codex | 6/9 (66.7%) | $1.00 | |
+
+### Via Codex CLI Harness
+
+| Model | Pass Rate | Cost | Notes |
+|-------|-----------|------|-------|
+| GPT-5.2 | 6/9 (66.7%) | $1.28 | |
+| GPT-5.2-Codex | 4/9 (44.4%) | $1.24 | Worse than via Aider |
+
+**Key findings:**
+- All models fail LD-07 (discovery GUID mining) - hardest task
+- Haiku 4.5 matches Opus performance at 1/9th the cost
+- GPT-5.2-Codex performs better via Aider (66.7%) than Codex CLI (44.4%)
+
 ## Supported Harnesses
 
 | Harness | Status | Bridge |
 |---------|--------|--------|
-| Claude Code | Planned | Official |
-| OpenAI Codex | Planned | Official |
-| Aider | Planned | Official |
+| Claude Code | ✅ Working | Official |
+| OpenAI Codex | ✅ Working | Official |
+| Aider | ✅ Working | Official |
 | Cursor | Planned | Community |
 | GitHub Copilot | Planned | Community |
 
