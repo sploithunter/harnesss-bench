@@ -46,9 +46,7 @@ htmlcov/
 # Workspaces (generated during benchmarks)
 workspaces/
 
-# Results (keep structure, ignore contents)
-results/*.json
-results/*.log
+# Results are in a submodule (harness-bench-results)
 
 # OS
 .DS_Store
