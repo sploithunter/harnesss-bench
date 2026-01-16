@@ -4,12 +4,14 @@ This document explains how to run DDS benchmarks across different AI coding agen
 
 ## Quick Start
 
+**Important:** All commands must be run from the repository root directory (`harness-bench/`).
+
 ```bash
 # Run full 9-task benchmark with Claude Code
 python scripts/run_dds_benchmark.py --harness claude-code --model anthropic/claude-sonnet-4-5-20250929
 
-# Run full 9-task benchmark with Cursor (requires GUI)
-python scripts/run_dds_benchmark.py --harness cursor --model gpt-5.2
+# Run full 9-task benchmark with Cursor
+python scripts/run_dds_benchmark.py --harness cursor --model sonnet-4.5
 
 # Run just the 4 newer tests with Aider
 python scripts/run_new_tests.py --harness aider --model openai/gpt-5.2
@@ -28,6 +30,9 @@ Set the following environment variables based on which harnesses/models you use:
 # For Claude Code and Anthropic models
 export ANTHROPIC_API_KEY="sk-ant-..."
 
+# For Cursor harness (required for cursor-agent CLI)
+export CURSOR_API_KEY="..."  # Get from https://cursor.com/settings
+
 # For OpenAI models (Codex CLI, Aider, some Cursor configs)
 export OPENAI_API_KEY="sk-..."
 
@@ -38,7 +43,43 @@ export XAI_API_KEY="..."
 export GOOGLE_API_KEY="..."
 ```
 
-### Dependencies
+### CLI Tool Installation
+
+Each harness requires its corresponding CLI tool to be installed:
+
+**Claude Code CLI:**
+```bash
+# Install Claude Code CLI (see https://docs.anthropic.com/claude-code)
+# Verify installation:
+which claude
+claude --version
+```
+
+**Cursor Agent CLI:**
+```bash
+# Install cursor-agent CLI
+curl https://cursor.com/install -fsSL | bash
+
+# The installer places cursor-agent in ~/.local/bin/
+# Verify installation:
+which cursor-agent || ~/.local/bin/cursor-agent --version
+```
+
+**Aider CLI:**
+```bash
+pip install aider-chat
+# Verify installation:
+aider --version
+```
+
+**Codex CLI:**
+```bash
+# Install OpenAI Codex CLI (see OpenAI documentation)
+# Verify installation:
+codex --version
+```
+
+### Python Dependencies
 
 ```bash
 # Install base package
@@ -47,8 +88,11 @@ pip install -e .
 # For Aider harness
 pip install -e ".[aider]"
 
-# For GUI bridge support (Cursor)
+# For GUI bridge support (Cursor file-watching mode)
 pip install -e ".[gui]"
+
+# For chart generation (required for aggregate_and_chart.py)
+pip install matplotlib numpy
 
 # For development (testing, linting)
 pip install -e ".[dev]"
@@ -99,18 +143,55 @@ x-ai/grok-4    # Grok 4
 
 ### Cursor Models
 
-For Cursor, use the model's short name as configured in Cursor settings:
+For Cursor, use the model's short name as supported by cursor-agent CLI:
 
 ```bash
---model opus-4.5
+--model opus-4.5           # Claude Opus 4.5
+--model sonnet-4.5         # Claude Sonnet 4.5
+--model sonnet-4.5-thinking # Sonnet 4.5 with extended thinking
+--model gpt-5.2            # GPT-5.2
+--model gpt-5.2-codex      # GPT-5.2 Codex variant
+--model gemini-3-pro       # Gemini 3 Pro
+--model gemini-3-flash     # Gemini 3 Flash
+--model grok               # Grok
+--model composer-1         # Cursor's Composer model
+--model auto               # Auto-select best model
+```
+
+The benchmark script also accepts full model names which are automatically mapped:
+```bash
+# These are equivalent:
+--model anthropic/claude-sonnet-4-5-20250929
 --model sonnet-4.5
---model gpt-5.2
---model gpt-5.2-codex
---model gemini-3-pro
---model grok
 ```
 
 ## Running Benchmarks
+
+### Prerequisites Check
+
+Before running benchmarks, verify your setup:
+
+```bash
+# 1. Verify you're in the repository root
+ls scripts/run_dds_benchmark.py  # Should exist
+
+# 2. Verify the harness package is installed
+python -c "from harness_bench.harnesses.cursor import CursorRalphLoopBridge; print('OK')"
+
+# 3. Verify task files exist
+ls templates/harness-bench-tasks/tasks/L2-dds/L1-PY-01_hello_publisher/TASK.md
+
+# 4. Verify DDS is available (required for most tasks)
+python -c "import rti.connextdds; print('DDS ready')"
+
+# 5. Verify harness-specific requirements:
+# For claude-code:
+which claude && echo "ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:+set}"
+# For cursor:
+(which cursor-agent || ~/.local/bin/cursor-agent --version) && echo "CURSOR_API_KEY: ${CURSOR_API_KEY:+set}"
+# For aider:
+which aider && echo "API keys set: ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:+set} OPENAI_API_KEY=${OPENAI_API_KEY:+set}"
+```
 
 ### Full Benchmark (9 Tasks)
 
@@ -163,38 +244,81 @@ python scripts/run_new_tests.py \
 
 ### Single Task Testing
 
-For development or debugging a specific task:
+For development or debugging a specific task, run the benchmark with a single worker:
+
+```bash
+# Run single worker for easier debugging (processes tasks sequentially)
+python scripts/run_dds_benchmark.py \
+    --harness cursor \
+    --model sonnet-4.5 \
+    --workers 1 \
+    --timeout 120 \
+    --max-iterations 3
+```
+
+Or use Python directly for more control:
 
 ```python
 #!/usr/bin/env python3
 """Run a single task for debugging."""
 
 import sys
+import shutil
+import tempfile
+import os
 from pathlib import Path
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from scripts.run_dds_benchmark import run_task
+# Add src to path (run from repo root)
+sys.path.insert(0, str(Path('.') / 'src'))
 
-result = run_task(
-    task_id="L1-PY-01_hello_publisher",
-    model="anthropic/claude-sonnet-4-5-20250929",
-    timeout=300,
-    harness="claude-code",
-    max_iterations=10
+from harness_bench.harnesses.cursor import CursorRalphLoopBridge
+
+# Configuration
+task_id = "L1-PY-01_hello_publisher"
+base_dir = Path('.')
+task_dir = base_dir / "templates/harness-bench-tasks/tasks/L2-dds" / task_id
+eval_dir = base_dir / "templates/harness-bench-eval/tasks/L2-dds" / task_id
+verify_script = eval_dir / "verify.py"
+
+# Create workspace
+workspace_dir = Path(tempfile.mkdtemp(prefix=f"{task_id[:10]}_"))
+print(f"Workspace: {workspace_dir}")
+
+# Copy task files
+for f in task_dir.glob("*"):
+    if f.is_file():
+        shutil.copy(f, workspace_dir / f.name)
+
+# Init git
+os.system(f"cd {workspace_dir} && git init -q && git add . && git commit -m 'Initial' -q")
+
+# Create and run bridge
+bridge = CursorRalphLoopBridge(
+    workspace=workspace_dir,
+    verify_script=verify_script,
+    model="sonnet-4.5",
+    max_iterations=5,
+    total_timeout=300,
+    stagnation_limit=3,
 )
 
-print(result)
+task_md = workspace_dir / "TASK.md"
+task_prompt = task_md.read_text() if task_md.exists() else ""
+
+success = bridge.execute_task(task_prompt)
+print(f"Success: {success}")
+print(f"Iterations: {bridge.iteration}")
+print(f"Cost: ${bridge.total_cost_usd:.4f}")
+
+# Cleanup (comment out to inspect workspace)
+# shutil.rmtree(workspace_dir, ignore_errors=True)
 ```
 
-Or use the benchmark script with output inspection:
-
-```bash
-# Run benchmark, results go to results/dds_benchmark_*.json
-python scripts/run_dds_benchmark.py \
-    --harness claude-code \
-    --model anthropic/claude-sonnet-4-5-20250929 \
-    --workers 1  # Single worker for easier debugging
-```
+**Available harness classes:**
+- `CursorRalphLoopBridge` - Cursor agent CLI
+- `RalphLoopBridge` (from `claude_code.py`) - Claude Code CLI
+- `AiderRalphLoopBridge` - Aider CLI
+- `CodexRalphLoopBridge` - OpenAI Codex CLI
 
 ### Running Multiple Models
 
@@ -340,6 +464,30 @@ results/logs/
 └── aider_openai_gpt-5.2_LD-01_20260115_130000.log
 ```
 
+Log files contain timestamped entries showing:
+- Iteration progress and timing
+- Prompt construction details
+- CLI command execution
+- File change detection
+- Verification results with checkpoint details
+- Cost estimates (where available)
+
+### Workspace Logs
+
+During execution, additional logs are created in the workspace directory:
+
+| File | Description |
+|------|-------------|
+| `.ralph_log.txt` | Claude Code harness execution log |
+| `.cursor_ralph_log.txt` | Cursor harness execution log |
+| `.aider_ralph_log.txt` | Aider harness execution log |
+| `.claude_conversation_iter{N}.jsonl` | Full Claude Code conversation (per iteration) |
+| `.cursor_conversation_iter{N}.json` | Cursor agent output (per iteration) |
+| `progress.txt` | Progress tracking visible to subsequent iterations |
+| `.ralph_status.json` | Current verification status |
+
+These workspace logs are copied to `results/logs/` after each task completes.
+
 ### Common Issues
 
 **Task not found:**
@@ -370,7 +518,26 @@ AuthenticationError: Invalid API key
 ```
 Cursor bridge timeout
 ```
-→ Ensure Cursor IDE is running and the workspace is open
+→ For GUI bridge mode: Ensure Cursor IDE is running and the workspace is open
+→ For cursor-agent mode: Check that `CURSOR_API_KEY` is set and valid
+
+**Cursor Agent CLI not found:**
+```
+Cursor Agent CLI not found. Install with: curl https://cursor.com/install -fsSL | bash
+```
+→ Install cursor-agent CLI and ensure it's in PATH (usually `~/.local/bin/cursor-agent`)
+
+**CURSOR_API_KEY not set:**
+```
+ValueError: CURSOR_API_KEY not set. Get one from https://cursor.com/settings
+```
+→ Export `CURSOR_API_KEY` environment variable with your API key from Cursor settings
+
+**ANTHROPIC_API_KEY not set:**
+```
+ValueError: ANTHROPIC_API_KEY not set
+```
+→ Export `ANTHROPIC_API_KEY` environment variable for Claude Code harness
 
 ## Examples
 
