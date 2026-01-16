@@ -69,6 +69,11 @@ Evaluator:
 - Runs verification against reference implementation
 - Produces result JSON
 
+## Documentation
+
+- **[Benchmarking Guide](docs/BENCHMARKING.md)** - How to run benchmarks with different harnesses and models
+- **[Protocol Specification](docs/PROTOCOL.md)** - Git-based protocol specification
+
 ## Git Protocol Specification
 
 See [docs/PROTOCOL.md](docs/PROTOCOL.md) for the full specification.
@@ -131,11 +136,27 @@ Iteration: {n}
 | GPT-5.2 | 6/9 (66.7%) | $1.28 | |
 | GPT-5.2-Codex | 4/9 (44.4%) | $1.24 | Worse than via Aider |
 
+### Via Cursor Harness
+
+| Model | Pass Rate | Cost | Notes |
+|-------|-----------|------|-------|
+| Claude Opus 4.5 | 8/9 (88.9%) | N/A | Only LD-07 failed |
+| Claude Sonnet 4.5 | 8/9 (88.9%) | N/A | Only LD-07 failed |
+| GPT-5.2 | 7/9 (77.8%) | N/A | LD-07, L3-PY-03 failed |
+| GPT-5.2-Codex | 7/9 (77.8%) | N/A | LD-07, L3-PY-03 failed |
+
+*Note: Cursor Agent CLI doesn't expose token usage, so costs are not tracked.*
+
 **Key findings:**
 - Claude Code harness achieves 100% with Opus/Sonnet 4.5 (only configs to pass LD-07)
-- Aider harness is more cost-effective but caps at 88.9%
-- Haiku 4.5 via Aider: best value at $0.55 for 88.9%
+- Cursor harness achieves 88.9% with Opus/Sonnet 4.5 (LD-07 remains the hardest task)
+- Aider harness is most cost-effective at 88.9% for $0.55 (Haiku 4.5)
 - GPT-5.2-Codex performs better via Aider (66.7%) than Codex CLI (44.4%)
+- Cursor outperforms Aider/Codex for GPT models (77.8% vs 66.7%)
+
+![Pass Rate Chart](results/charts/dds_pass_rate_all_harnesses.png)
+
+![Cost vs Performance](results/charts/dds_cost_vs_performance.png)
 
 ## Supported Harnesses
 
@@ -144,7 +165,7 @@ Iteration: {n}
 | Claude Code | ✅ Working | Official |
 | OpenAI Codex | ✅ Working | Official |
 | Aider | ✅ Working | Official |
-| Cursor | Planned | Community |
+| Cursor | ✅ Working | Official |
 | GitHub Copilot | Planned | Community |
 
 ## Installation

@@ -527,6 +527,61 @@ class ClaudeCodeDriverBridge(HarnessBridge):
             return False
 
 
+def normalize_claude_model(model: str) -> str:
+    """Normalize model name for Claude Code CLI.
+
+    Claude Code CLI accepts:
+    - Short aliases: 'sonnet', 'opus', 'haiku'
+    - Full model names: 'claude-sonnet-4-5-20250929'
+
+    It does NOT accept provider prefixes like 'anthropic/'.
+
+    Args:
+        model: Model name (may include provider prefix or version aliases)
+
+    Returns:
+        Normalized model name for Claude Code CLI
+    """
+    if not model:
+        return model
+
+    # Strip provider prefix (e.g., 'anthropic/claude-sonnet-4-5-20250929')
+    if "/" in model:
+        model = model.split("/", 1)[1]
+
+    # Map common aliases to Claude Code CLI format
+    # The CLI accepts both short aliases and full names
+    aliases = {
+        # Sonnet 4.5 aliases
+        "sonnet-4.5": "sonnet",
+        "sonnet-4-5": "sonnet",
+        "claude-sonnet-4.5": "sonnet",
+        "claude-sonnet-4-5": "sonnet",
+        # Opus 4.5 aliases
+        "opus-4.5": "opus",
+        "opus-4-5": "opus",
+        "claude-opus-4.5": "opus",
+        "claude-opus-4-5": "opus",
+        # Haiku 4.5 aliases
+        "haiku-4.5": "haiku",
+        "haiku-4-5": "haiku",
+        "claude-haiku-4.5": "haiku",
+        "claude-haiku-4-5": "haiku",
+        # Sonnet 4.0 aliases
+        "sonnet-4.0": "claude-sonnet-4-20250514",
+        "sonnet-4": "claude-sonnet-4-20250514",
+        # Opus 4.0 aliases
+        "opus-4.0": "claude-opus-4-20250514",
+        "opus-4": "claude-opus-4-20250514",
+    }
+
+    model_lower = model.lower()
+    if model_lower in aliases:
+        return aliases[model_lower]
+
+    return model
+
+
 class RalphLoopBridge(HarnessBridge):
     """Ralph Wiggum-style while loop bridge.
 
@@ -566,7 +621,7 @@ class RalphLoopBridge(HarnessBridge):
         Args:
             workspace: Path to task workspace
             verify_script: Path to verify.py
-            model: Claude model
+            model: Claude model (can use aliases like 'sonnet-4.5' or full names)
             max_iterations: Max loop iterations
             total_timeout: TOTAL timeout for entire test (seconds)
             stagnation_limit: Stop after N iterations with no file changes
@@ -574,7 +629,9 @@ class RalphLoopBridge(HarnessBridge):
             verbose: Print real-time progress to stdout
             verify_timeout: Timeout for verification script (seconds)
         """
-        super().__init__(workspace, model)
+        # Normalize model name for Claude Code CLI
+        normalized_model = normalize_claude_model(model) if model else model
+        super().__init__(workspace, normalized_model)
         # Resolve to absolute path since we run from workspace dir
         self.verify_script = Path(verify_script).resolve() if verify_script else None
         self.max_iterations = max_iterations

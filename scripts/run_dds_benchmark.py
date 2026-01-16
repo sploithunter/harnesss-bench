@@ -172,7 +172,51 @@ def main():
     parser.add_argument("--timeout", type=int, default=300, help="Per-task timeout")
     parser.add_argument("--max-iterations", type=int, default=10, help="Max iterations per task")
     parser.add_argument("--output", type=str, help="Output JSON file")
+    parser.add_argument("--task", type=str, help="Run single task by ID (e.g., L1-PY-01_hello_publisher)")
+    parser.add_argument("--tasks", type=str, help="Comma-separated list of task IDs to run")
+    parser.add_argument("--list-tasks", action="store_true", help="List all available tasks and exit")
     args = parser.parse_args()
+
+    # List tasks and exit
+    if args.list_tasks:
+        print("Available DDS tasks:")
+        for i, task in enumerate(DDS_TASKS, 1):
+            print(f"  {i}. {task}")
+        return 0
+
+    # Select tasks to run
+    if args.task:
+        # Single task mode
+        if args.task not in DDS_TASKS:
+            # Try partial match
+            matches = [t for t in DDS_TASKS if args.task.lower() in t.lower()]
+            if len(matches) == 1:
+                tasks_to_run = matches
+            elif len(matches) > 1:
+                print(f"Error: Ambiguous task '{args.task}'. Matches: {matches}")
+                return 1
+            else:
+                print(f"Error: Unknown task '{args.task}'. Use --list-tasks to see available tasks.")
+                return 1
+        else:
+            tasks_to_run = [args.task]
+    elif args.tasks:
+        # Multiple tasks mode
+        task_ids = [t.strip() for t in args.tasks.split(",")]
+        tasks_to_run = []
+        for task_id in task_ids:
+            if task_id in DDS_TASKS:
+                tasks_to_run.append(task_id)
+            else:
+                # Try partial match
+                matches = [t for t in DDS_TASKS if task_id.lower() in t.lower()]
+                if len(matches) == 1:
+                    tasks_to_run.append(matches[0])
+                else:
+                    print(f"Error: Unknown or ambiguous task '{task_id}'")
+                    return 1
+    else:
+        tasks_to_run = DDS_TASKS
 
     # Determine which harness will be used
     # Map 'claude-code' arg to 'claude' for get_bridge_class
@@ -183,14 +227,14 @@ def main():
     print(f"Running DDS benchmark with {args.model}")
     print(f"Harness: {harness_id}")
     print(f"Workers: {args.workers}, Timeout: {args.timeout}s, Max iterations: {args.max_iterations}")
-    print(f"Tasks: {len(DDS_TASKS)}")
+    print(f"Tasks: {len(tasks_to_run)}")
     print("-" * 60)
 
     results = []
     start_time = time.time()
 
     with ThreadPoolExecutor(max_workers=args.workers) as executor:
-        futures = {executor.submit(run_task, task, args.model, args.timeout, harness_arg, args.max_iterations): task for task in DDS_TASKS}
+        futures = {executor.submit(run_task, task, args.model, args.timeout, harness_arg, args.max_iterations): task for task in tasks_to_run}
 
         for future in as_completed(futures):
             task_id = futures[future]
@@ -235,10 +279,11 @@ def main():
             "max_iterations": args.max_iterations,
             "workers": args.workers,
         },
-        "total_tasks": len(DDS_TASKS),
+        "total_tasks": len(tasks_to_run),
+        "all_tasks_count": len(DDS_TASKS),
         "passed": passed,
         "failed": len(results) - passed,
-        "pass_rate": round(100 * passed / len(results), 1),
+        "pass_rate": round(100 * passed / len(results), 1) if results else 0,
         "total_elapsed_s": round(total_elapsed, 1),
         "total_cost_usd": round(total_cost, 4),
         "avg_cost_per_task_usd": round(total_cost / len(results), 4) if results else 0,
@@ -249,7 +294,7 @@ def main():
         json.dump(summary, f, indent=2)
 
     print(f"Results saved to: {output_path}")
-    return 0 if passed == len(DDS_TASKS) else 1
+    return 0 if passed == len(tasks_to_run) else 1
 
 if __name__ == "__main__":
     sys.exit(main())

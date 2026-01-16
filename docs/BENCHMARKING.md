@@ -7,14 +7,20 @@ This document explains how to run DDS benchmarks across different AI coding agen
 **Important:** All commands must be run from the repository root directory (`harness-bench/`).
 
 ```bash
+# List all available tasks
+python scripts/run_dds_benchmark.py --list-tasks
+
+# Run a single task (for testing/debugging)
+python scripts/run_dds_benchmark.py --harness claude-code --model sonnet-4.5 --task L1-PY-01
+
 # Run full 9-task benchmark with Claude Code
-python scripts/run_dds_benchmark.py --harness claude-code --model anthropic/claude-sonnet-4-5-20250929
+python scripts/run_dds_benchmark.py --harness claude-code --model sonnet-4.5
 
 # Run full 9-task benchmark with Cursor
 python scripts/run_dds_benchmark.py --harness cursor --model sonnet-4.5
 
 # Run just the 4 newer tests with Aider
-python scripts/run_new_tests.py --harness aider --model openai/gpt-5.2
+python scripts/run_new_tests.py --harness aider --model anthropic/claude-sonnet-4-5-20250929
 
 # Generate charts from all results
 python scripts/aggregate_and_chart.py
@@ -121,14 +127,37 @@ python -c "import rti.connextdds; print('DDS ready')"
 
 ## Available Models
 
+### Model Name Formats
+
+Different harnesses use different model name formats. The benchmark scripts handle normalization automatically:
+
+| Harness | Model Name Format | Example |
+|---------|------------------|---------|
+| Claude Code | Aliases or full names (no provider prefix) | `sonnet`, `sonnet-4.5`, `claude-sonnet-4-5-20250929` |
+| Aider | Provider/model format | `anthropic/claude-sonnet-4-5-20250929` |
+| Cursor | Short aliases | `sonnet-4.5`, `opus-4.5`, `gpt-5.2` |
+| Codex | Provider/model format | `openai/gpt-5.2-codex` |
+
+**Tip:** For Claude Code harness, you can use any of these formats - they're automatically normalized:
+- `sonnet` → uses latest Sonnet
+- `sonnet-4.5` → normalized to `sonnet`
+- `anthropic/claude-sonnet-4-5-20250929` → stripped to `claude-sonnet-4-5-20250929`
+
 ### Tested Model Identifiers
 
 ```bash
-# Anthropic (via Claude Code or Aider)
+# Anthropic (via Aider - use full provider/model format)
 anthropic/claude-opus-4-5-20251101     # Opus 4.5
 anthropic/claude-sonnet-4-5-20250929   # Sonnet 4.5
 anthropic/claude-sonnet-4-20250514     # Sonnet 4.0
 anthropic/claude-haiku-4-5-20251001    # Haiku 4.5
+
+# Anthropic (via Claude Code - use aliases or bare model names)
+sonnet         # Latest Sonnet (currently 4.5)
+opus           # Latest Opus (currently 4.5)
+haiku          # Latest Haiku (currently 4.5)
+sonnet-4.5     # Sonnet 4.5 (alias)
+claude-sonnet-4-5-20250929   # Full model name (works too)
 
 # OpenAI (via Codex, Aider, or Cursor)
 openai/gpt-5.2         # GPT-5.2
@@ -200,7 +229,7 @@ The main benchmark script runs all 9 core DDS tasks:
 ```bash
 python scripts/run_dds_benchmark.py \
     --harness claude-code \
-    --model anthropic/claude-sonnet-4-5-20250929 \
+    --model sonnet-4.5 \
     --workers 4 \
     --timeout 300 \
     --max-iterations 10
@@ -213,6 +242,9 @@ python scripts/run_dds_benchmark.py \
 - `--timeout`: Per-task timeout in seconds (default: 300)
 - `--max-iterations`: Max coding iterations per task (default: 10)
 - `--output`: Custom output JSON path (optional)
+- `--task`: Run a single task by ID (supports partial matching)
+- `--tasks`: Comma-separated list of task IDs to run
+- `--list-tasks`: List all available tasks and exit
 
 **Tasks included:**
 1. `L1-PY-01_hello_publisher` - Basic DDS publisher
@@ -244,19 +276,32 @@ python scripts/run_new_tests.py \
 
 ### Single Task Testing
 
-For development or debugging a specific task, run the benchmark with a single worker:
+Use `--task` to run a specific task (supports partial matching):
 
 ```bash
-# Run single worker for easier debugging (processes tasks sequentially)
+# Run a single task by exact ID
 python scripts/run_dds_benchmark.py \
-    --harness cursor \
+    --harness claude-code \
     --model sonnet-4.5 \
-    --workers 1 \
-    --timeout 120 \
-    --max-iterations 3
+    --task L1-PY-01_hello_publisher
+
+# Run a single task with partial ID match
+python scripts/run_dds_benchmark.py \
+    --harness claude-code \
+    --model sonnet-4.5 \
+    --task L1-PY-01
+
+# Run multiple specific tasks
+python scripts/run_dds_benchmark.py \
+    --harness claude-code \
+    --model sonnet-4.5 \
+    --tasks "L1-PY-01,L1-PY-02,LD-01"
+
+# List all available tasks
+python scripts/run_dds_benchmark.py --list-tasks
 ```
 
-Or use Python directly for more control:
+For more control, use Python directly:
 
 ```python
 #!/usr/bin/env python3
@@ -547,10 +592,10 @@ ValueError: ANTHROPIC_API_KEY not set
 # Set API key
 export ANTHROPIC_API_KEY="sk-ant-..."
 
-# Run Claude Code with Sonnet 4.5
+# Run Claude Code with Sonnet 4.5 (using model alias)
 python scripts/run_dds_benchmark.py \
     --harness claude-code \
-    --model anthropic/claude-sonnet-4-5-20250929 \
+    --model sonnet-4.5 \
     --workers 4 \
     --timeout 300
 
