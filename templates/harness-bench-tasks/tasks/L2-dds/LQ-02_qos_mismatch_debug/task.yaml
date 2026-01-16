@@ -1,0 +1,30 @@
+id: LQ-02_qos_mismatch_debug
+name: QoS Mismatch Debugging
+description: Debug why publisher and subscriber don't communicate (reliability QoS incompatibility)
+category: L2-dds
+difficulty: hard
+
+prompt_file: TASK.md
+
+starter_files:
+  - publisher.py
+  - subscriber.py
+
+expected_outputs:
+  - publisher.py
+  - subscriber.py
+
+tags:
+  - dds
+  - qos
+  - debugging
+  - reliability
+  - python
+  - connext
+
+environment:
+  requires:
+    - rti-connext-dds
+    - python3
+
+time_limit: 600

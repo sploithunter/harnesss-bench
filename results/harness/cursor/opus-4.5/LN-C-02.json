@@ -1,0 +1,11 @@
+{
+  "task_id": "LN-C-02_content_filtered_subscriber",
+  "harness": "cursor",
+  "model": "opus-4.5",
+  "timestamp": "2026-01-16T09:23:12.254664",
+  "task": "LN-C-02_content_filtered_subscriber",
+  "success": true,
+  "iterations": 1,
+  "elapsed": 92.5,
+  "cost_usd": 0.0
+}

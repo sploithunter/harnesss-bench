@@ -1,0 +1,11 @@
+{
+  "task_id": "LQ-02_qos_mismatch_debug",
+  "harness": "cursor",
+  "model": "sonnet-4.5",
+  "timestamp": "2026-01-16T09:32:17.939712",
+  "task": "LQ-02_qos_mismatch_debug",
+  "success": true,
+  "iterations": 1,
+  "elapsed": 29.0,
+  "cost_usd": 0.0
+}

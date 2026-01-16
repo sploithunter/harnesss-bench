@@ -1,0 +1,11 @@
+{
+  "task": "LD-07_discovery_guid_mining",
+  "success": true,
+  "iterations": 2,
+  "run_date": "2025-01-14T00:00:00",
+  "duration_s": null,
+  "cost_usd": 2.1075,
+  "elapsed": 594.9,
+  "harness": "claude-code",
+  "model": "opus-4.5"
+}

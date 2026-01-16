@@ -1,0 +1,11 @@
+{
+  "task": "LN-CPP-01_native_cpp_publisher",
+  "success": true,
+  "iterations": 1,
+  "run_date": "2026-01-15T14:30:35.711831",
+  "duration_s": null,
+  "cost_usd": 0.05,
+  "elapsed": 111.6,
+  "harness": "aider",
+  "model": "gemini-3-pro"
+}

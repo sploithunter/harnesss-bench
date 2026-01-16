@@ -1,0 +1,11 @@
+{
+  "task": "LQ-01_late_joiner_durability",
+  "success": true,
+  "iterations": 2,
+  "run_date": "2026-01-15T13:48:54.541665",
+  "duration_s": null,
+  "cost_usd": 0,
+  "elapsed": 0,
+  "harness": "cursor",
+  "model": "sonnet-4.5"
+}

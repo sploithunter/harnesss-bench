@@ -1,0 +1,11 @@
+{
+  "task_id": "LN-CPP-03_content_filtered_subscriber",
+  "harness": "cursor",
+  "model": "opus-4.5",
+  "timestamp": "2026-01-16T09:28:08.020859",
+  "task": "LN-CPP-03_content_filtered_subscriber",
+  "success": true,
+  "iterations": 1,
+  "elapsed": 73.6,
+  "cost_usd": 0.0
+}

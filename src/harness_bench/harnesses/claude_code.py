@@ -757,8 +757,19 @@ class RalphLoopBridge(HarnessBridge):
 
         Unlike intelligent driver, this just dumps the progress file
         so Claude can see what happened in previous iterations.
+
+        Also pre-includes TASK.md content to ensure it's seen before code generation.
         """
-        parts = [original_prompt]
+        parts = []
+
+        # Pre-include TASK.md content to ensure the LLM sees requirements first
+        task_md = self.workspace / "TASK.md"
+        if task_md.exists():
+            parts.append("# TASK.md - READ CAREFULLY BEFORE WRITING CODE\n")
+            parts.append(task_md.read_text())
+            parts.append("\n---\n\n")
+
+        parts.append(original_prompt)
 
         # Add progress file contents if exists and has content
         progress_file = self.workspace / "progress.txt"
@@ -794,7 +805,8 @@ class RalphLoopBridge(HarnessBridge):
 
         cmd = [
             "claude", "-p",
-            "--output-format", "json",
+            "--output-format", "stream-json",  # Stream JSON for real-time logging
+            "--verbose",  # Include full conversation details
             "--dangerously-skip-permissions",
         ]
         if self.model:
@@ -806,8 +818,11 @@ class RalphLoopBridge(HarnessBridge):
         effective_timeout = timeout if timeout else self.total_timeout
         self._log(f"Command: claude -p --model {self.model} ... (timeout: {effective_timeout:.0f}s)")
 
+        # Create conversation log file for this iteration
+        conversation_log_file = self.workspace / f".claude_conversation_iter{self.iteration}.jsonl"
+
         try:
-            # Use Popen for explicit process control
+            # Use Popen for explicit process control with real-time logging
             proc = subprocess.Popen(
                 cmd,
                 cwd=self.workspace,
@@ -820,19 +835,55 @@ class RalphLoopBridge(HarnessBridge):
             )
 
             try:
-                stdout, stderr = proc.communicate(timeout=effective_timeout)
+                # Read stdout line by line and save to log file in real-time
+                stdout_lines = []
+                with open(conversation_log_file, 'w') as log_f:
+                    import select
+                    import time
+                    start_time = time.time()
+
+                    while True:
+                        # Check timeout
+                        elapsed = time.time() - start_time
+                        if elapsed > effective_timeout:
+                            raise subprocess.TimeoutExpired(cmd, effective_timeout)
+
+                        # Check if process has finished
+                        returncode = proc.poll()
+
+                        # Read available output (non-blocking with timeout)
+                        if proc.stdout:
+                            line = proc.stdout.readline()
+                            if line:
+                                stdout_lines.append(line)
+                                log_f.write(line)
+                                log_f.flush()  # Real-time flush for crash recovery
+                            elif returncode is not None:
+                                # Process finished and no more output
+                                break
+                        else:
+                            break
+
+                stdout = ''.join(stdout_lines)
+                stderr = proc.stderr.read() if proc.stderr else ''
                 returncode = proc.returncode
 
-                # Parse JSON output for cost tracking
+                # Parse stream-json output for cost tracking
                 cost_usd = 0.0
-                if stdout and stdout.strip():
-                    try:
-                        result = json.loads(stdout.strip())
-                        cost_usd = result.get("total_cost_usd", 0.0)
-                        self.total_cost_usd += cost_usd
-                        self._log(f"Iteration cost: ${cost_usd:.4f}, Total cost: ${self.total_cost_usd:.4f}")
-                    except json.JSONDecodeError:
-                        self._log("Could not parse JSON output for cost tracking", "WARN")
+                for line in stdout_lines:
+                    line = line.strip()
+                    if line:
+                        try:
+                            event = json.loads(line)
+                            # Look for result event with cost info
+                            if event.get("type") == "result":
+                                cost_usd = event.get("total_cost_usd", 0.0)
+                                self.total_cost_usd += cost_usd
+                        except json.JSONDecodeError:
+                            pass
+
+                self._log(f"Iteration cost: ${cost_usd:.4f}, Total cost: ${self.total_cost_usd:.4f}")
+                self._log(f"Conversation log saved to: {conversation_log_file.name}")
 
                 # Log output summary
                 self._log(f"Claude Code exit={returncode}, cost=${cost_usd:.4f}")

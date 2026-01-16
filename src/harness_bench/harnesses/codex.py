@@ -390,8 +390,20 @@ class CodexRalphLoopBridge(HarnessBridge):
 
         Unlike Claude Code's Ralph which relies on reading progress.txt,
         this version includes progress directly in the prompt.
+
+        CRITICAL: We pre-include TASK.md content because Codex CLI doesn't
+        automatically read it before generating code.
         """
-        parts = [original_prompt]
+        parts = []
+
+        # Pre-include TASK.md content to ensure the LLM sees requirements first
+        task_md = self.workspace / "TASK.md"
+        if task_md.exists():
+            parts.append("# TASK.md - READ CAREFULLY BEFORE WRITING CODE\n")
+            parts.append(task_md.read_text())
+            parts.append("\n---\n\n")
+
+        parts.append(original_prompt)
 
         # Add progress log from previous iterations
         if self._progress_log:
@@ -449,6 +461,12 @@ class CodexRalphLoopBridge(HarnessBridge):
             try:
                 stdout, stderr = proc.communicate(timeout=effective_timeout)
                 returncode = proc.returncode
+
+                # Save full JSONL output to conversation log file
+                conversation_log_file = self.workspace / f".codex_conversation_iter{self.iteration}.jsonl"
+                with open(conversation_log_file, 'w') as log_f:
+                    log_f.write(stdout if stdout else "")
+                self._log(f"Conversation log saved to: {conversation_log_file.name}")
 
                 # Try to extract cost from Codex JSONL output
                 # Each line is a JSON event, look for cost info

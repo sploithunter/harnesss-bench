@@ -1,0 +1,11 @@
+{
+  "task_id": "LN-CPP-03_content_filtered_subscriber",
+  "harness": "cursor",
+  "model": "sonnet-4.5",
+  "timestamp": "2026-01-16T09:31:05.368710",
+  "task": "LN-CPP-03_content_filtered_subscriber",
+  "success": true,
+  "iterations": 3,
+  "elapsed": 241.3,
+  "cost_usd": 0.0
+}

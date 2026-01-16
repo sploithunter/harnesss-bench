@@ -1,0 +1,32 @@
+id: LN-C-02_content_filtered_subscriber
+name: Native C DDS ContentFilteredTopic Subscriber
+description: Create a DDS subscriber in C that uses ContentFilteredTopic for middleware-level filtering
+category: L2-dds
+difficulty: expert
+
+prompt_file: TASK.md
+
+starter_files:
+  - SensorReading.idl
+
+expected_outputs:
+  - SensorReading.idl
+  - subscriber.c
+  - CMakeLists.txt
+
+tags:
+  - dds
+  - c
+  - native
+  - subscriber
+  - content-filtered-topic
+  - advanced
+  - connext
+
+environment:
+  requires:
+    - rti-connext-dds
+    - cmake
+    - gcc
+
+time_limit: 900

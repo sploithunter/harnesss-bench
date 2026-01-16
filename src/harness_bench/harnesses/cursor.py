@@ -651,24 +651,33 @@ class CursorRalphLoopBridge(HarnessBridge):
     harness_version = "1.0.0"
 
     # Model name mapping: our names -> Cursor CLI model strings
+    # Available: opus-4.5, sonnet-4.5, sonnet-4.5-thinking, gpt-5.2, gpt-5.2-codex, etc.
     MODEL_MAP = {
         # Claude models
-        "anthropic/claude-opus-4-5-20251101": "claude-4-opus",
-        "claude-opus-4-5-20251101": "claude-4-opus",
-        "claude-opus-4-5": "claude-4-opus",
-        "anthropic/claude-sonnet-4-5-20250929": "claude-4-sonnet",
-        "claude-sonnet-4-5-20250929": "claude-4-sonnet",
-        "claude-sonnet-4-5": "claude-4-sonnet",
-        "anthropic/claude-haiku-4-5-20251001": "claude-4-haiku",
-        "claude-haiku-4-5-20251001": "claude-4-haiku",
-        "claude-haiku-4-5": "claude-4-haiku",
+        "anthropic/claude-opus-4-5-20251101": "opus-4.5",
+        "claude-opus-4-5-20251101": "opus-4.5",
+        "claude-opus-4-5": "opus-4.5",
+        "anthropic/claude-sonnet-4-5-20250929": "sonnet-4.5",
+        "claude-sonnet-4-5-20250929": "sonnet-4.5",
+        "claude-sonnet-4-5": "sonnet-4.5",
+        "anthropic/claude-haiku-4-5-20251001": "sonnet-4.5",  # No haiku, use sonnet
+        "claude-haiku-4-5-20251001": "sonnet-4.5",
+        "claude-haiku-4-5": "sonnet-4.5",
         # OpenAI models
-        "openai/gpt-5.2": "gpt-5",
-        "gpt-5.2": "gpt-5",
-        "openai/gpt-5.2-codex": "gpt-5",
-        "gpt-5.2-codex": "gpt-5",
+        "openai/gpt-5.2": "gpt-5.2",
+        "gpt-5.2": "gpt-5.2",
+        "openai/gpt-5.2-codex": "gpt-5.2-codex",
+        "gpt-5.2-codex": "gpt-5.2-codex",
+        # Google models
+        "gemini-3-pro": "gemini-3-pro",
+        "gemini-3-flash": "gemini-3-flash",
+        "openrouter/google/gemini-3-pro-preview": "gemini-3-pro",
+        # xAI models
+        "grok": "grok",
+        "grok-4": "grok",
+        "openrouter/x-ai/grok-4": "grok",
         # Cursor's own model
-        "composer": "composer",
+        "composer": "composer-1",
     }
 
     def __init__(
@@ -714,31 +723,31 @@ class CursorRalphLoopBridge(HarnessBridge):
     def _map_model(self, model: str | None) -> str:
         """Map model name to Cursor CLI model string."""
         if not model:
-            return "claude-4-sonnet"
+            return "sonnet-4.5"
 
         # Check direct mapping
         if model in self.MODEL_MAP:
             return self.MODEL_MAP[model]
 
         # Check if it's already a Cursor model name
-        cursor_models = {"claude-4-sonnet", "claude-4-opus", "claude-4-haiku",
-                        "gpt-5", "composer", "sonnet-4-thinking"}
+        cursor_models = {"opus-4.5", "sonnet-4.5", "sonnet-4.5-thinking", "gpt-5.2",
+                        "gpt-5.2-codex", "composer-1", "auto"}
         if model in cursor_models:
             return model
 
         # Fallback: try to infer from model name
         model_lower = model.lower()
         if "opus" in model_lower:
-            return "claude-4-opus"
-        elif "sonnet" in model_lower:
-            return "claude-4-sonnet"
-        elif "haiku" in model_lower:
-            return "claude-4-haiku"
+            return "opus-4.5"
+        elif "sonnet" in model_lower or "claude" in model_lower or "haiku" in model_lower:
+            return "sonnet-4.5"
+        elif "codex" in model_lower:
+            return "gpt-5.2-codex"
         elif "gpt" in model_lower:
-            return "gpt-5"
+            return "gpt-5.2"
 
         # Default
-        return "claude-4-sonnet"
+        return "sonnet-4.5"
 
     def _log(self, message: str, level: str = "INFO") -> None:
         """Log message to stdout and progress log."""
@@ -903,8 +912,21 @@ class CursorRalphLoopBridge(HarnessBridge):
             }, indent=2))
 
     def _build_ralph_prompt(self, original_prompt: str) -> str:
-        """Build prompt with progress context embedded."""
-        parts = [original_prompt]
+        """Build prompt with progress context embedded.
+
+        CRITICAL: We pre-include TASK.md content because Cursor Agent CLI
+        doesn't automatically read it before generating code.
+        """
+        parts = []
+
+        # Pre-include TASK.md content to ensure the LLM sees requirements first
+        task_md = self.workspace / "TASK.md"
+        if task_md.exists():
+            parts.append("# TASK.md - READ CAREFULLY BEFORE WRITING CODE\n")
+            parts.append(task_md.read_text())
+            parts.append("\n---\n\n")
+
+        parts.append(original_prompt)
 
         # Add progress log from previous iterations
         if self._progress_log:
@@ -940,12 +962,12 @@ class CursorRalphLoopBridge(HarnessBridge):
             "--force",  # Auto-approve file modifications
             "--output-format", "json",
             "--workspace", str(self.workspace),
-            "-m", self.cursor_model,
+            "--model", self.cursor_model,
             prompt,
         ]
 
         effective_timeout = timeout if timeout else self.total_timeout
-        self._log(f"Command: cursor-agent -p --force -m {self.cursor_model} --workspace {self.workspace} ... (timeout: {effective_timeout:.0f}s)")
+        self._log(f"Command: cursor-agent -p --force --model {self.cursor_model} --workspace {self.workspace} ... (timeout: {effective_timeout:.0f}s)")
 
         try:
             proc = subprocess.Popen(
@@ -963,6 +985,12 @@ class CursorRalphLoopBridge(HarnessBridge):
                 stdout, stderr = proc.communicate(timeout=effective_timeout)
                 returncode = proc.returncode
 
+                # Save full output to conversation log file
+                conversation_log_file = self.workspace / f".cursor_conversation_iter{self.iteration}.json"
+                with open(conversation_log_file, 'w') as log_f:
+                    log_f.write(stdout if stdout else "")
+                self._log(f"Conversation log saved to: {conversation_log_file.name}")
+
                 # Try to extract stats from Cursor JSON output
                 if stdout:
                     try:
@@ -974,9 +1002,7 @@ class CursorRalphLoopBridge(HarnessBridge):
                         self._log(f"Cursor stats: lines_created={lines_created}, lines_read={lines_read}, duration_ms={duration_ms}")
 
                         # Estimate cost (rough estimate based on lines)
-                        # This is approximate since Cursor doesn't expose token counts
-                        estimated_tokens = (lines_read * 50) + (lines_created * 100)  # rough estimate
-                        # Use approximate pricing
+                        estimated_tokens = (lines_read * 50) + (lines_created * 100)
                         if "opus" in self.cursor_model:
                             cost_per_1k = 0.015
                         elif "sonnet" in self.cursor_model:
@@ -1087,6 +1113,12 @@ class CursorRalphLoopBridge(HarnessBridge):
         import os
 
         env = os.environ.copy()
+
+        # Ensure cursor-agent is in PATH
+        home = os.path.expanduser("~")
+        local_bin = os.path.join(home, ".local", "bin")
+        if local_bin not in env.get("PATH", ""):
+            env["PATH"] = local_bin + ":" + env.get("PATH", "")
 
         if "CURSOR_API_KEY" not in env:
             raise ValueError("CURSOR_API_KEY not set. Get one from https://cursor.com/settings")

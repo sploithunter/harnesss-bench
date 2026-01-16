@@ -1,0 +1,27 @@
+id: LR-01_dds_rpc_request_reply
+name: DDS RPC Client Implementation
+description: Create a DDS RPC client using rti.rpc module to call a Calculator service
+category: L2-dds
+difficulty: hard
+
+prompt_file: TASK.md
+
+starter_files: []
+
+expected_outputs:
+  - client.py
+
+tags:
+  - dds
+  - rpc
+  - request-reply
+  - python
+  - connext
+  - hard
+
+environment:
+  requires:
+    - rti-connext-dds
+    - python3
+
+time_limit: 600

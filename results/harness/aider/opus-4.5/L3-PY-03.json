@@ -1,0 +1,11 @@
+{
+  "task": "L3-PY-03_full_loop_adapter",
+  "success": true,
+  "iterations": 1,
+  "run_date": "2026-01-15T16:59:57.633358",
+  "duration_s": null,
+  "cost_usd": 0.11,
+  "elapsed": 43.5,
+  "harness": "aider",
+  "model": "opus-4.5"
+}

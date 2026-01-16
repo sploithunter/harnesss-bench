@@ -1,0 +1,11 @@
+{
+  "task": "L3-PY-03_full_loop_adapter",
+  "success": false,
+  "iterations": 4,
+  "run_date": "2026-01-15T14:30:35.711831",
+  "duration_s": null,
+  "cost_usd": 0.37,
+  "elapsed": 309.9,
+  "harness": "aider",
+  "model": "gemini-3-pro"
+}

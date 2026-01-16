@@ -1,0 +1,11 @@
+{
+  "task_id": "LQ-02_qos_mismatch_debug",
+  "harness": "cursor",
+  "model": "gpt-5.2",
+  "timestamp": "2026-01-16T09:29:30.958048",
+  "task": "LQ-02_qos_mismatch_debug",
+  "success": true,
+  "iterations": 1,
+  "elapsed": 82.8,
+  "cost_usd": 0.0
+}

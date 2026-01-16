@@ -1,0 +1,11 @@
+{
+  "task": "LD-01_content_filtered_topic",
+  "success": true,
+  "iterations": 1,
+  "run_date": "2026-01-15T15:31:47.291661",
+  "duration_s": null,
+  "cost_usd": 0.0,
+  "elapsed": 0.4,
+  "harness": "cursor",
+  "model": "grok"
+}

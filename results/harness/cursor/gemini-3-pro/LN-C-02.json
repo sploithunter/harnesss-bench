@@ -1,0 +1,11 @@
+{
+  "task_id": "LN-C-02_content_filtered_subscriber",
+  "harness": "cursor",
+  "model": "gemini-3-pro",
+  "timestamp": "2026-01-16T09:21:39.646387",
+  "task": "LN-C-02_content_filtered_subscriber",
+  "success": false,
+  "iterations": 1,
+  "elapsed": 306.4,
+  "cost_usd": 0.0
+}

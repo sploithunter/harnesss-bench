@@ -1,0 +1,11 @@
+{
+  "task": "LQ-01_late_joiner_durability",
+  "success": true,
+  "iterations": 1,
+  "run_date": "2025-01-14T00:00:00",
+  "duration_s": null,
+  "cost_usd": 0.65,
+  "elapsed": 653.2,
+  "harness": "claude-code",
+  "model": "opus-4.5"
+}

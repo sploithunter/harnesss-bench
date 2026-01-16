@@ -1,0 +1,32 @@
+id: LN-C-01_native_c_subscriber
+name: Native C DDS Subscriber
+description: Create a DDS subscriber in C from scratch that interoperates with Python
+category: L2-dds
+difficulty: expert
+
+prompt_file: TASK.md
+
+starter_files:
+  - HelloWorld.idl
+
+expected_outputs:
+  - HelloWorld.idl
+  - subscriber.c
+  - CMakeLists.txt
+
+tags:
+  - dds
+  - c
+  - native
+  - subscriber
+  - interop
+  - connext
+  - hard
+
+environment:
+  requires:
+    - rti-connext-dds
+    - cmake
+    - gcc
+
+time_limit: 900

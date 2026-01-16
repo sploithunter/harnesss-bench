@@ -1,0 +1,5 @@
+struct SensorReading {
+    string<64> sensor_id;
+    double value;
+    long long timestamp;
+};

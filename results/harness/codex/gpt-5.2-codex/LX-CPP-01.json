@@ -1,0 +1,11 @@
+{
+  "task": "LX-CPP-01_python_to_cpp_publisher",
+  "success": true,
+  "iterations": 1,
+  "run_date": "2026-01-15T16:11:12.222210",
+  "duration_s": null,
+  "cost_usd": 0.1796,
+  "elapsed": 154.7,
+  "harness": "codex",
+  "model": "gpt-5.2-codex"
+}

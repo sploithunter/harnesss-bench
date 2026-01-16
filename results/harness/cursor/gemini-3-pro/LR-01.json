@@ -1,0 +1,11 @@
+{
+  "task_id": "LR-01_dds_rpc_request_reply",
+  "harness": "cursor",
+  "model": "gemini-3-pro",
+  "timestamp": "2026-01-16T09:37:18.570758",
+  "task": "LR-01_dds_rpc_request_reply",
+  "success": false,
+  "iterations": 2,
+  "elapsed": 324.4,
+  "cost_usd": 0.0
+}

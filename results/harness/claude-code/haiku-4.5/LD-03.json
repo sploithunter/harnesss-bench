@@ -1,0 +1,11 @@
+{
+  "task": "LD-03_rtiddsgen_workflow",
+  "success": true,
+  "iterations": 1,
+  "run_date": "2025-01-14T00:00:00",
+  "duration_s": null,
+  "cost_usd": 0.0626,
+  "elapsed": 65.1,
+  "harness": "claude-code",
+  "model": "haiku-4.5"
+}

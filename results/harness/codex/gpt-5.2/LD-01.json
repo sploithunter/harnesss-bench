@@ -1,0 +1,11 @@
+{
+  "task": "LD-01_content_filtered_topic",
+  "success": true,
+  "iterations": 1,
+  "run_date": "2026-01-15T16:18:38.494720",
+  "duration_s": null,
+  "cost_usd": 0.2118,
+  "elapsed": 148.9,
+  "harness": "codex",
+  "model": "gpt-5.2"
+}

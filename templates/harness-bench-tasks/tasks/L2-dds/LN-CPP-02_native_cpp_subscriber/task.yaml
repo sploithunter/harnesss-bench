@@ -1,0 +1,31 @@
+id: LN-CPP-02_native_cpp_subscriber
+name: Native C++ DDS Subscriber
+description: Create a DDS subscriber in C++ from scratch that interoperates with Python
+category: L2-dds
+difficulty: hard
+
+prompt_file: TASK.md
+
+starter_files:
+  - HelloWorld.idl
+
+expected_outputs:
+  - HelloWorld.idl
+  - subscriber.cxx
+  - CMakeLists.txt
+
+tags:
+  - dds
+  - cpp
+  - native
+  - subscriber
+  - interop
+  - connext
+
+environment:
+  requires:
+    - rti-connext-dds
+    - cmake
+    - clang
+
+time_limit: 900

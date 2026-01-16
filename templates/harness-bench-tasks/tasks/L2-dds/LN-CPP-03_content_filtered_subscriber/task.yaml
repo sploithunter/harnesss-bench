@@ -1,0 +1,32 @@
+id: LN-CPP-03_content_filtered_subscriber
+name: Native C++ DDS ContentFilteredTopic Subscriber
+description: Create a DDS subscriber in C++ that uses ContentFilteredTopic for middleware-level filtering
+category: L2-dds
+difficulty: expert
+
+prompt_file: TASK.md
+
+starter_files:
+  - SensorReading.idl
+
+expected_outputs:
+  - SensorReading.idl
+  - subscriber.cxx
+  - CMakeLists.txt
+
+tags:
+  - dds
+  - cpp
+  - native
+  - subscriber
+  - content-filtered-topic
+  - advanced
+  - connext
+
+environment:
+  requires:
+    - rti-connext-dds
+    - cmake
+    - clang
+
+time_limit: 900

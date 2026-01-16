@@ -1,0 +1,11 @@
+{
+  "task": "LN-CPP-01_native_cpp_publisher",
+  "success": true,
+  "iterations": 1,
+  "run_date": "2025-01-14T00:00:00",
+  "duration_s": null,
+  "cost_usd": 0.1387,
+  "elapsed": 120.2,
+  "harness": "claude-code",
+  "model": "haiku-4.5"
+}

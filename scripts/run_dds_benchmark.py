@@ -107,6 +107,22 @@ def run_task(task_id: str, model: str, timeout: int = 300, harness: str | None =
         success = bridge.execute_task(task_prompt)
         elapsed = time.time() - start_time
 
+        # Preserve logs before cleanup
+        log_dir = base_dir / "results" / "logs"
+        log_dir.mkdir(parents=True, exist_ok=True)
+
+        # Find and save the harness log file
+        log_patterns = [".ralph_log.txt", ".codex_ralph_log.txt", ".aider_ralph_log.txt", ".cursor_ralph_log.txt"]
+        for pattern in log_patterns:
+            log_file = workspace_dir / pattern
+            if log_file.exists():
+                timestamp = time.strftime("%Y%m%d_%H%M%S")
+                harness_name = harness or "unknown"
+                safe_model = model.replace("/", "_")
+                dest_name = f"{harness_name}_{safe_model}_{task_id}_{timestamp}.log"
+                shutil.copy(log_file, log_dir / dest_name)
+                break
+
         return {
             "task": task_id,
             "success": success,
