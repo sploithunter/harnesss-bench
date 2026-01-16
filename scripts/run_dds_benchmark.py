@@ -18,8 +18,9 @@ from harness_bench.harnesses.codex import CodexRalphLoopBridge
 from harness_bench.harnesses.claude_code import RalphLoopBridge as ClaudeRalphLoopBridge
 from harness_bench.harnesses.cursor import CursorRalphLoopBridge
 
-# 9 DDS tasks (7 Python + 2 C++)
+# 13 DDS tasks (7 Python + 6 native C/C++)
 DDS_TASKS = [
+    # Original 9 tasks
     "L1-PY-01_hello_publisher",
     "L1-PY-02_hello_subscriber",
     "LD-01_content_filtered_topic",
@@ -29,6 +30,11 @@ DDS_TASKS = [
     "L3-PY-03_full_loop_adapter",
     "LN-CPP-01_native_cpp_publisher",
     "LX-CPP-01_python_to_cpp_publisher",
+    # 4 new harder tasks
+    "LQ-02_qos_mismatch_debug",
+    "LR-01_dds_rpc_request_reply",
+    "LN-CPP-03_content_filtered_subscriber",
+    "LN-C-02_content_filtered_subscriber",
 ]
 
 def get_bridge_class(model: str, harness: str | None = None):
@@ -65,7 +71,7 @@ def get_bridge_class(model: str, harness: str | None = None):
     return AiderRalphLoopBridge
 
 
-def run_task(task_id: str, model: str, timeout: int = 300, harness: str | None = None, max_iterations: int = 10) -> dict:
+def run_task(task_id: str, model: str, timeout: int = 300, harness: str | None = None, max_iterations: int = 10, enable_mcp: bool = False) -> dict:
     """Run a single task and return results."""
     base_dir = Path(__file__).parent.parent
     task_dir = base_dir / "templates/harness-bench-tasks/tasks/L2-dds" / task_id
@@ -91,14 +97,22 @@ def run_task(task_id: str, model: str, timeout: int = 300, harness: str | None =
 
         # Select and run bridge
         bridge_class = get_bridge_class(model, harness)
-        bridge = bridge_class(
-            workspace=workspace_dir,
-            verify_script=verify_script,
-            model=model,
-            max_iterations=max_iterations,
-            total_timeout=timeout,
-            stagnation_limit=3,
-        )
+
+        # Build bridge kwargs
+        bridge_kwargs = {
+            "workspace": workspace_dir,
+            "verify_script": verify_script,
+            "model": model,
+            "max_iterations": max_iterations,
+            "total_timeout": timeout,
+            "stagnation_limit": 3,
+        }
+
+        # Add MCP option for Cursor harness
+        if harness == "cursor" and enable_mcp:
+            bridge_kwargs["enable_mcp"] = True
+
+        bridge = bridge_class(**bridge_kwargs)
 
         task_md = workspace_dir / "TASK.md"
         task_prompt = task_md.read_text() if task_md.exists() else ""
@@ -175,6 +189,7 @@ def main():
     parser.add_argument("--task", type=str, help="Run single task by ID (e.g., L1-PY-01_hello_publisher)")
     parser.add_argument("--tasks", type=str, help="Comma-separated list of task IDs to run")
     parser.add_argument("--list-tasks", action="store_true", help="List all available tasks and exit")
+    parser.add_argument("--mcp", action="store_true", help="Enable MCP (ConnextAI) for DDS assistance (Cursor only, requires VPN)")
     args = parser.parse_args()
 
     # List tasks and exit
@@ -233,8 +248,12 @@ def main():
     results = []
     start_time = time.time()
 
+    # Log MCP status if enabled
+    if args.mcp and harness_id == "cursor":
+        print(f"MCP: Enabled (ConnextAI DDS assistance)")
+
     with ThreadPoolExecutor(max_workers=args.workers) as executor:
-        futures = {executor.submit(run_task, task, args.model, args.timeout, harness_arg, args.max_iterations): task for task in tasks_to_run}
+        futures = {executor.submit(run_task, task, args.model, args.timeout, harness_arg, args.max_iterations, args.mcp): task for task in tasks_to_run}
 
         for future in as_completed(futures):
             task_id = futures[future]

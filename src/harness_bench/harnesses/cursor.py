@@ -680,6 +680,10 @@ class CursorRalphLoopBridge(HarnessBridge):
         "composer": "composer-1",
     }
 
+    # MCP server for DDS assistance (requires VPN)
+    MCP_SERVER_URL = "https://sandbox-chatbot.rti.com/mcp"
+    MCP_SERVER_NAME = "ConnextAI"
+
     def __init__(
         self,
         workspace: Path,
@@ -690,6 +694,7 @@ class CursorRalphLoopBridge(HarnessBridge):
         stagnation_limit: int = 3,
         verbose: bool = True,
         verify_timeout: int = 300,
+        enable_mcp: bool = False,
     ):
         """Initialize Cursor Ralph loop bridge.
 
@@ -702,6 +707,7 @@ class CursorRalphLoopBridge(HarnessBridge):
             stagnation_limit: Stop after N iterations with no file changes
             verbose: Print real-time progress to stdout
             verify_timeout: Timeout for verification script (seconds)
+            enable_mcp: Enable MCP tools (ConnextAI for DDS help)
         """
         super().__init__(workspace, model)
         self.verify_script = Path(verify_script).resolve() if verify_script else None
@@ -710,12 +716,14 @@ class CursorRalphLoopBridge(HarnessBridge):
         self.stagnation_limit = stagnation_limit
         self.verify_timeout = verify_timeout
         self.verbose = verbose
+        self.enable_mcp = enable_mcp
         self.iteration = 0
         self.stagnation_count = 0
         self.last_file_hash = ""
         self._start_time = None
         self.total_cost_usd = 0.0
         self._progress_log: list[str] = []
+        self._mcp_available = False
 
         # Map model name to Cursor's model string
         self.cursor_model = self._map_model(model)
@@ -748,6 +756,37 @@ class CursorRalphLoopBridge(HarnessBridge):
 
         # Default
         return "sonnet-4.5"
+
+    def _check_mcp_available(self) -> bool:
+        """Check if ConnextAI MCP server is accessible (requires VPN).
+
+        Returns:
+            True if MCP server is reachable, False otherwise.
+        """
+        import subprocess
+
+        try:
+            # Quick connectivity check with 3 second timeout
+            result = subprocess.run(
+                [
+                    "curl", "-s", "--connect-timeout", "3",
+                    "-X", "POST",
+                    "-H", "Content-Type: application/json",
+                    "-H", "Accept: application/json",
+                    "-d", '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"harness-bench","version":"1.0"}}}',
+                    self.MCP_SERVER_URL,
+                ],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+
+            if result.returncode == 0 and "protocolVersion" in result.stdout:
+                return True
+            return False
+
+        except Exception:
+            return False
 
     def _log(self, message: str, level: str = "INFO") -> None:
         """Log message to stdout and progress log."""
@@ -791,6 +830,14 @@ class CursorRalphLoopBridge(HarnessBridge):
         self._log(f"Workspace: {self.workspace}")
         self._log(f"Verify script: {self.verify_script}")
         self._log(f"Model: {self.model} -> Cursor model: {self.cursor_model}")
+
+        # Check MCP availability (requires VPN)
+        if self.enable_mcp:
+            self._mcp_available = self._check_mcp_available()
+            if self._mcp_available:
+                self._log(f"MCP server ({self.MCP_SERVER_NAME}) is available - DDS assistance enabled")
+            else:
+                self._log(f"MCP server ({self.MCP_SERVER_NAME}) not reachable - VPN may be required. Proceeding without DDS assistance.", "WARN")
 
         while self.iteration < self.max_iterations:
             # Check total timeout before starting iteration
@@ -963,11 +1010,17 @@ class CursorRalphLoopBridge(HarnessBridge):
             "--output-format", "json",
             "--workspace", str(self.workspace),
             "--model", self.cursor_model,
-            prompt,
         ]
 
+        # Enable MCP tools if available (auto-approve for headless mode)
+        if self.enable_mcp and self._mcp_available:
+            cmd.append("--approve-mcps")
+
+        cmd.append(prompt)
+
         effective_timeout = timeout if timeout else self.total_timeout
-        self._log(f"Command: cursor-agent -p --force --model {self.cursor_model} --workspace {self.workspace} ... (timeout: {effective_timeout:.0f}s)")
+        mcp_flag = " --approve-mcps" if (self.enable_mcp and self._mcp_available) else ""
+        self._log(f"Command: cursor-agent -p --force{mcp_flag} --model {self.cursor_model} --workspace {self.workspace} ... (timeout: {effective_timeout:.0f}s)")
 
         try:
             proc = subprocess.Popen(

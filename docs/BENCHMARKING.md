@@ -194,6 +194,58 @@ The benchmark script also accepts full model names which are automatically mappe
 --model sonnet-4.5
 ```
 
+### MCP Server (ConnextAI) - Optional
+
+The Cursor harness supports an optional MCP (Model Context Protocol) server that provides DDS expertise via RTI's ConnextAI. When enabled, the AI agent can consult ConnextAI for help with DDS-related questions during task execution.
+
+**Requirements:**
+- VPN connection to RTI network (the MCP server is at `https://sandbox-chatbot.rti.com/mcp`)
+- MCP server configured in `~/.cursor/mcp.json`
+
+**Setup:**
+
+1. Add ConnextAI to your MCP configuration:
+```bash
+# Edit ~/.cursor/mcp.json
+{
+  "mcpServers": {
+    "ConnextAI": {
+      "type": "sse",
+      "url": "https://sandbox-chatbot.rti.com/mcp"
+    }
+  }
+}
+```
+
+2. Enable the MCP server:
+```bash
+cursor-agent mcp enable ConnextAI
+```
+
+3. Verify it's working (requires VPN):
+```bash
+cursor-agent mcp list-tools ConnextAI
+# Should show: ask_connext_question
+```
+
+**Behavior:**
+- The harness automatically checks if the MCP server is reachable at startup
+- If reachable, it adds `--approve-mcps` to enable DDS assistance
+- If not reachable (VPN not connected), it logs a warning and proceeds without MCP
+- The AI agent decides when to use the `ask_connext_question` tool based on context
+
+**Disabling MCP:**
+
+To run without MCP even when available, modify the bridge initialization:
+```python
+bridge = CursorRalphLoopBridge(
+    workspace=workspace_dir,
+    verify_script=verify_script,
+    model="sonnet-4.5",
+    enable_mcp=False,  # Disable MCP
+)
+```
+
 ## Running Benchmarks
 
 ### Prerequisites Check
