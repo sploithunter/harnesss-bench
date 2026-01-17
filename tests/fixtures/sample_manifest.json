@@ -1,0 +1,22 @@
+{
+  "protocol_version": "1.0",
+  "harness": {
+    "id": "test-harness",
+    "version": "1.0.0",
+    "vendor": "test-vendor",
+    "model": "test-model"
+  },
+  "task": {
+    "id": "TEST-01",
+    "name": "Test Task"
+  },
+  "run": {
+    "id": "run_12345",
+    "status": "pending"
+  },
+  "environment": {
+    "os": "linux",
+    "arch": "x86_64",
+    "python_version": "3.10.0"
+  }
+}

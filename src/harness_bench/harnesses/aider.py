@@ -25,6 +25,7 @@ except ImportError:
 
 from ..core.bridge import HarnessBridge
 from ..core.protocol import CommitAction
+from .ralph_base import RalphLoopBase
 
 
 class AiderBridge(HarnessBridge):
@@ -319,7 +320,7 @@ class AiderBridge(HarnessBridge):
         return False
 
 
-class AiderRalphLoopBridge(HarnessBridge):
+class AiderRalphLoopBridge(RalphLoopBase):
     """Ralph Wiggum-style while loop bridge for Aider.
 
     Adapts the Ralph pattern for Aider's less-agentic nature:
@@ -365,185 +366,44 @@ class AiderRalphLoopBridge(HarnessBridge):
             verify_timeout: Timeout for verification script (seconds)
             auto_test: Use Aider's --auto-test with verify.py as test command
         """
-        super().__init__(workspace, model)
-        self.verify_script = Path(verify_script).resolve() if verify_script else None
-        self.max_iterations = max_iterations
-        self.total_timeout = total_timeout
-        self.stagnation_limit = stagnation_limit
-        self.verify_timeout = verify_timeout
-        self.verbose = verbose
+        super().__init__(
+            workspace=workspace,
+            verify_script=verify_script,
+            model=model,
+            max_iterations=max_iterations,
+            total_timeout=total_timeout,
+            stagnation_limit=stagnation_limit,
+            verbose=verbose,
+            verify_timeout=verify_timeout,
+        )
         self.auto_test = auto_test
-        self.iteration = 0
-        self.stagnation_count = 0
-        self.last_file_hash = ""
-        self._start_time = None
-        self.total_cost_usd = 0.0
-        self._progress_log: list[str] = []
 
-    def _log(self, message: str, level: str = "INFO") -> None:
-        """Log message to stdout and progress log."""
-        import datetime
-        timestamp = datetime.datetime.now().strftime("%H:%M:%S")
-        log_line = f"[{timestamp}] [{level}] {message}"
-        if self.verbose:
-            print(log_line, flush=True)
-        # Also append to a detailed log file
-        log_file = self.workspace / ".aider_ralph_log.txt"
-        with open(log_file, "a") as f:
-            f.write(log_line + "\n")
+    def _find_key_files(self) -> list[Path]:
+        """Find key files in workspace that Aider should know about."""
+        key_files = []
+        extensions = [".py", ".cpp", ".cxx", ".hpp", ".h", ".yaml", ".json", ".md"]
 
-    def _time_remaining(self) -> float:
-        """Get seconds remaining before total timeout."""
-        if self._start_time is None:
-            return self.total_timeout
-        elapsed = time.time() - self._start_time
-        return max(0, self.total_timeout - elapsed)
+        # Look for task file
+        task_file = self.workspace / "TASK.md"
+        if task_file.exists():
+            key_files.append(task_file)
 
-    def _is_timed_out(self) -> bool:
-        """Check if total timeout has been exceeded."""
-        return self._time_remaining() <= 0
+        # Always search workspace root, plus src/ if it exists
+        search_dirs = [self.workspace]
+        src_dir = self.workspace / "src"
+        if src_dir.exists():
+            search_dirs.append(src_dir)
 
-    def execute_task(self, task_prompt: str) -> bool:
-        """Execute with Ralph-style while loop adapted for Aider.
+        for search_dir in search_dirs:
+            for ext in extensions:
+                for f in search_dir.glob(f"*{ext}"):
+                    if f.is_file() and f.stat().st_size < 50000:  # Skip huge files
+                        if f not in key_files:  # Avoid duplicates
+                            key_files.append(f)
 
-        Since Aider doesn't auto-read workspace files, progress is
-        included directly in the --message prompt each iteration.
-        """
-        self._start_time = time.time()
+        return key_files[:10]  # Limit total files
 
-        self._log(f"Aider Ralph loop started: max_iterations={self.max_iterations}, total_timeout={self.total_timeout}s")
-        self._log(f"Workspace: {self.workspace}")
-        self._log(f"Verify script: {self.verify_script}")
-        self._log(f"Model: {self.model}")
-
-        while self.iteration < self.max_iterations:
-            # Check total timeout before starting iteration
-            remaining = self._time_remaining()
-            if remaining <= 0:
-                self._log("TOTAL TIMEOUT reached", "ERROR")
-                self._progress_log.append("TIMEOUT: Total time limit reached")
-                break
-
-            self.iteration += 1
-            iter_start = time.time()
-
-            self._log(f"=== ITERATION {self.iteration}/{self.max_iterations} === (remaining: {remaining:.0f}s)")
-            self.log_event("aider_ralph_iteration_start", {
-                "iteration": self.iteration,
-                "stagnation_count": self.stagnation_count,
-                "time_remaining": remaining,
-            })
-
-            # Build prompt with progress context embedded
-            self._log("Building prompt...")
-            prompt = self._build_ralph_prompt(task_prompt)
-            self._log(f"Prompt length: {len(prompt)} chars")
-
-            # Run Aider with remaining time as timeout
-            self._log(f"Running Aider (timeout: {remaining:.0f}s)...")
-            aider_start = time.time()
-            aider_success, aider_reason = self._run_aider(prompt, timeout=remaining)
-            aider_elapsed = time.time() - aider_start
-            self._log(f"Aider finished: {aider_reason}, elapsed={aider_elapsed:.1f}s")
-
-            # Commit changes
-            self._log("Checking for file changes...")
-            files_changed = self._commit_if_changed()
-            self._log(f"Files changed: {files_changed}")
-
-            # Check stagnation (circuit breaker)
-            if not files_changed:
-                self.stagnation_count += 1
-                self._log(f"No changes - stagnation count: {self.stagnation_count}/{self.stagnation_limit}", "WARN")
-                self._progress_log.append(f"No files changed (stagnation: {self.stagnation_count})")
-                if self.stagnation_count >= self.stagnation_limit:
-                    self._log("CIRCUIT BREAKER: Stopping due to stagnation", "ERROR")
-                    self.log_event("aider_ralph_circuit_breaker", {
-                        "reason": "stagnation",
-                        "iterations_without_change": self.stagnation_count,
-                    })
-                    break
-            else:
-                self.stagnation_count = 0
-
-            # Run verification
-            if self.verify_script and self.verify_script.exists():
-                self._log("Running verification...")
-                verify_start = time.time()
-                verify_result = self._run_verification()
-                verify_elapsed = time.time() - verify_start
-                self._log(f"Verification finished: elapsed={verify_elapsed:.1f}s")
-
-                if verify_result.get("success", False):
-                    total_elapsed = time.time() - self._start_time
-                    self._log(f"VERIFICATION PASSED! Total time: {total_elapsed:.1f}s", "SUCCESS")
-                    self._progress_log.append("VERIFICATION PASSED!")
-                    self.log_event("aider_ralph_success", {"iteration": self.iteration})
-                    return True
-
-                # Log failure details for next iteration prompt
-                error_msg = verify_result.get("message", "Unknown error")
-                self._log(f"Verification failed: {error_msg}", "WARN")
-                self._progress_log.append(f"Iteration {self.iteration} - Verification failed: {error_msg}")
-
-                # Extract checkpoints from nested structure
-                details = verify_result.get("details", {})
-                checkpoints = details.get("checkpoints", []) or verify_result.get("checkpoints", [])
-                for cp in checkpoints:
-                    if not cp.get("passed", False):
-                        # Get error details from nested 'details' dict if present
-                        cp_details = cp.get("details", {})
-                        error_info = cp_details.get("stderr", "") or cp_details.get("error", "") or cp.get("message", "")
-                        if error_info:
-                            # Truncate long errors but keep useful info
-                            error_info = error_info.strip()[:1500]
-                            cp_msg = f"  FAIL [{cp.get('name')}]: {error_info}"
-
-                            # Add hint for wrong DDS library imports (common hallucination)
-                            wrong_dds_libs = ["cyclonedx", "cyclone", "opendds", "fastdds", "fast_dds", "pydds"]
-                            if "ModuleNotFoundError" in error_info or "No module named" in error_info:
-                                for wrong_lib in wrong_dds_libs:
-                                    if wrong_lib in error_info.lower():
-                                        cp_msg += "\n    HINT: For RTI Connext DDS, use 'import rti.connextdds as dds'"
-                                        break
-                            # Also detect wrong 'import dds' (not rti.connextdds)
-                            if "module 'dds' has no attribute" in error_info:
-                                cp_msg += "\n    HINT: Wrong DDS import. Use 'import rti.connextdds as dds' (not 'import dds')"
-                        else:
-                            cp_msg = f"  FAIL [{cp.get('name')}]: (no details)"
-                        self._log(cp_msg, "WARN")
-                        self._progress_log.append(cp_msg)
-
-            iter_elapsed = time.time() - iter_start
-            self._log(f"Iteration {self.iteration} complete: {iter_elapsed:.1f}s, remaining: {self._time_remaining():.0f}s")
-
-        total_elapsed = time.time() - self._start_time
-        self._log(f"Aider Ralph loop finished: iterations={self.iteration}, total_time={total_elapsed:.1f}s", "WARN")
-        self.log_event("aider_ralph_max_iterations", {"iterations": self.iteration})
-        return False
-
-    def _build_ralph_prompt(self, original_prompt: str) -> str:
-        """Build prompt with progress context embedded.
-
-        Unlike Claude Code which can read progress.txt, we embed
-        progress directly in the Aider message prompt.
-        """
-        parts = [original_prompt]
-
-        # Add progress log from previous iterations
-        if self._progress_log:
-            parts.append("\n\n---\n# Previous Iteration Progress\n")
-            # Only include last ~30 entries to avoid prompt bloat
-            recent_progress = self._progress_log[-30:]
-            if len(self._progress_log) > 30:
-                parts.append("(truncated earlier entries...)\n")
-            parts.append("\n".join(recent_progress))
-            parts.append("\n---\n")
-            parts.append("\nFix any issues noted above and complete the task.")
-
-        return "\n".join(parts)
-
-    def _run_aider(self, prompt: str, timeout: float | None = None) -> tuple[bool, str]:
+    def _run_harness_command(self, prompt: str, timeout: float) -> tuple[bool, str]:
         """Run Aider (fresh context each time - no session continuation).
 
         Args:
@@ -605,8 +465,7 @@ class AiderRalphLoopBridge(HarnessBridge):
         # Add the prompt via --message
         cmd.extend(["--message", prompt])
 
-        effective_timeout = timeout if timeout else self.total_timeout
-        self._log(f"Command: aider --model {self.model} ... (timeout: {effective_timeout:.0f}s)")
+        self._log(f"Command: aider --model {self.model} ... (timeout: {timeout:.0f}s)")
 
         try:
             proc = subprocess.Popen(
@@ -621,7 +480,7 @@ class AiderRalphLoopBridge(HarnessBridge):
             )
 
             try:
-                stdout, stderr = proc.communicate(timeout=effective_timeout)
+                stdout, stderr = proc.communicate(timeout=timeout)
                 returncode = proc.returncode
 
                 # Try to extract cost from Aider output
@@ -643,7 +502,7 @@ class AiderRalphLoopBridge(HarnessBridge):
                     return False, f"exit_code={returncode}"
 
             except subprocess.TimeoutExpired:
-                self._log(f"TIMEOUT after {effective_timeout:.0f}s - killing process group", "WARN")
+                self._log(f"TIMEOUT after {timeout:.0f}s - killing process group", "WARN")
                 if os.name != 'nt':
                     try:
                         os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
@@ -658,98 +517,26 @@ class AiderRalphLoopBridge(HarnessBridge):
             self._log(f"Exception: {str(e)}", "ERROR")
             return False, f"error: {str(e)}"
 
-    def _find_key_files(self) -> list[Path]:
-        """Find key files in workspace that Aider should know about."""
-        key_files = []
-        extensions = [".py", ".cpp", ".cxx", ".hpp", ".h", ".yaml", ".json", ".md"]
-
-        # Look for task file
-        task_file = self.workspace / "TASK.md"
-        if task_file.exists():
-            key_files.append(task_file)
-
-        # Always search workspace root, plus src/ if it exists
-        search_dirs = [self.workspace]
-        src_dir = self.workspace / "src"
-        if src_dir.exists():
-            search_dirs.append(src_dir)
-
-        for search_dir in search_dirs:
-            for ext in extensions:
-                for f in search_dir.glob(f"*{ext}"):
-                    if f.is_file() and f.stat().st_size < 50000:  # Skip huge files
-                        if f not in key_files:  # Avoid duplicates
-                            key_files.append(f)
-
-        return key_files[:10]  # Limit total files
-
-    def _commit_if_changed(self) -> bool:
-        """Commit if there are changes. Returns True if files changed."""
-        try:
-            result = subprocess.run(
-                ["git", "status", "--porcelain"],
-                cwd=self.workspace,
-                capture_output=True,
-                text=True,
-            )
-            if result.stdout.strip():
-                current_hash = hash(result.stdout.strip())
-                if current_hash != self.last_file_hash:
-                    self.last_file_hash = current_hash
-                    subprocess.run(
-                        ["git", "add", "-A"],
-                        cwd=self.workspace,
-                        capture_output=True,
-                    )
-                    subprocess.run(
-                        ["git", "commit", "-m", f"[aider-ralph] Iteration {self.iteration}"],
-                        cwd=self.workspace,
-                        capture_output=True,
-                    )
-                    return True
-            return False
-        except Exception:
-            return False
-
-    def _run_verification(self) -> dict[str, Any]:
-        """Run verification script."""
-        self._log(f"Running: python {self.verify_script.name} (timeout: {self.verify_timeout}s)")
-        try:
-            result = subprocess.run(
-                ["python", str(self.verify_script), str(self.workspace)],
-                capture_output=True,
-                text=True,
-                timeout=self.verify_timeout,
-                cwd=self.workspace,
-            )
-            if result.stdout.strip():
-                import json
-                parsed = json.loads(result.stdout.strip())
-                self._log(f"Verification result: success={parsed.get('success')}, score={parsed.get('score')}")
-                return parsed
-            self._log(f"No output from verify.py, stderr: {result.stderr[:200] if result.stderr else 'none'}", "ERROR")
-            return {"success": False, "message": result.stderr or "No output"}
-        except json.JSONDecodeError as e:
-            self._log(f"JSON decode error: {e}", "ERROR")
-            return {"success": False, "message": f"Invalid JSON: {str(e)}"}
-        except subprocess.TimeoutExpired:
-            self._log(f"Verification timed out after {self.verify_timeout}s", "ERROR")
-            return {"success": False, "message": "Verification timed out"}
-        except Exception as e:
-            self._log(f"Verification error: {str(e)}", "ERROR")
-            return {"success": False, "message": str(e)}
-
     def _get_env(self) -> dict[str, str]:
-        """Get environment variables for Aider."""
+        """Get environment variables for Aider.
+
+        Returns:
+            Environment dictionary
+
+        Raises:
+            EnvironmentError: If required API key is not set
+        """
+        from ..exceptions import EnvironmentError
+
         env = os.environ.copy()
 
         # Aider needs API keys based on model
         if self.model:
             if "anthropic" in self.model.lower():
                 if "ANTHROPIC_API_KEY" not in env:
-                    raise ValueError("ANTHROPIC_API_KEY not set")
+                    raise EnvironmentError("ANTHROPIC_API_KEY not set")
             elif "openai" in self.model.lower() or "gpt" in self.model.lower():
                 if "OPENAI_API_KEY" not in env:
-                    raise ValueError("OPENAI_API_KEY not set")
+                    raise EnvironmentError("OPENAI_API_KEY not set")
 
         return env
