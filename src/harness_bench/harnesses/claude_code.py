@@ -1145,6 +1145,7 @@ class ClaudeCodeSubscriptionBridge(RalphLoopBase):
         verbose: bool = True,
         verify_timeout: int = 300,
         task_id: str | None = None,
+        append_system_prompt: bool = True,
     ):
         """Initialize subscription bridge.
 
@@ -1159,6 +1160,7 @@ class ClaudeCodeSubscriptionBridge(RalphLoopBase):
             verbose: Print real-time progress to stdout
             verify_timeout: Timeout for verification script (seconds)
             task_id: Task identifier for logging
+            append_system_prompt: Add system prompt encouraging thorough testing (default: True)
         """
         normalized_model = normalize_claude_model(model) if model else model
         super().__init__(
@@ -1177,6 +1179,7 @@ class ClaudeCodeSubscriptionBridge(RalphLoopBase):
         self._tmux_session: str | None = None
         self._completion_file: Path | None = None
         self._task_id = task_id
+        self._append_system_prompt = append_system_prompt
         self._iteration_cost: float = 0.0
         self._last_response: str = ""
         # Structured result tracking (JSON format like dual-agent benchmark)
@@ -1755,16 +1758,17 @@ exit 0
         if self.allowed_tools:
             claude_args.extend(["--allowedTools", ",".join(self.allowed_tools)])
 
-        # Add system prompt appendix to encourage thorough task completion
+        # Optionally add system prompt appendix to encourage thorough task completion
         # This helps match the behavior of -p mode which tends to be more thorough
-        append_prompt = (
-            "CRITICAL: You MUST run tests and verify your work before declaring the task complete. "
-            "Do NOT stop after just writing code - actually execute tests to confirm functionality. "
-            "If tests fail, debug and fix the issues. Only declare done when tests pass. "
-            "Be thorough: read files, write code, run tests, fix issues, repeat until success."
-        )
-        # Quote the prompt to protect from shell interpretation (contains spaces)
-        claude_args.extend(["--append-system-prompt", f'"{append_prompt}"'])
+        if self._append_system_prompt:
+            append_prompt = (
+                "CRITICAL: You MUST run tests and verify your work before declaring the task complete. "
+                "Do NOT stop after just writing code - actually execute tests to confirm functionality. "
+                "If tests fail, debug and fix the issues. Only declare done when tests pass. "
+                "Be thorough: read files, write code, run tests, fix issues, repeat until success."
+            )
+            # Quote the prompt to protect from shell interpretation (contains spaces)
+            claude_args.extend(["--append-system-prompt", f'"{append_prompt}"'])
 
         # Add hooks via settings override for completion detection and logging
         # Tool hooks use matcher: '*', generic hooks have no matcher

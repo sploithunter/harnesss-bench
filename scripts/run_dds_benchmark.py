@@ -16,6 +16,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 from harness_bench.harnesses.aider import AiderRalphLoopBridge
 from harness_bench.harnesses.codex import CodexRalphLoopBridge
 from harness_bench.harnesses.claude_code import RalphLoopBridge as ClaudeRalphLoopBridge
+from harness_bench.harnesses.claude_code import ClaudeCodeSubscriptionBridge
 from harness_bench.harnesses.cursor import CursorRalphLoopBridge
 
 # 13 DDS tasks (7 Python + 6 native C/C++)
@@ -42,7 +43,7 @@ def get_bridge_class(model: str, harness: str | None = None):
 
     Args:
         model: Model identifier (e.g., 'anthropic/claude-sonnet-4-5', 'openai/o3-mini')
-        harness: Explicit harness choice ('aider', 'codex', 'claude', 'cursor')
+        harness: Explicit harness choice ('aider', 'codex', 'claude', 'claude-sub', 'cursor')
 
     Returns:
         Bridge class to use
@@ -55,6 +56,9 @@ def get_bridge_class(model: str, harness: str | None = None):
             return CodexRalphLoopBridge
         elif harness == "claude":
             return ClaudeRalphLoopBridge
+        elif harness == "claude-sub":
+            # Subscription-based Claude Code (no API key, uses tmux)
+            return ClaudeCodeSubscriptionBridge
         elif harness == "aider":
             return AiderRalphLoopBridge
         elif harness == "cursor":
@@ -71,7 +75,7 @@ def get_bridge_class(model: str, harness: str | None = None):
     return AiderRalphLoopBridge
 
 
-def run_task(task_id: str, model: str, timeout: int = 300, harness: str | None = None, max_iterations: int = 10, enable_mcp: bool = False) -> dict:
+def run_task(task_id: str, model: str, timeout: int = 300, harness: str | None = None, max_iterations: int = 10, enable_mcp: bool = False, no_append_prompt: bool = False) -> dict:
     """Run a single task and return results."""
     base_dir = Path(__file__).parent.parent
     task_dir = base_dir / "templates/harness-bench-tasks/tasks/L2-dds" / task_id
@@ -112,6 +116,11 @@ def run_task(task_id: str, model: str, timeout: int = 300, harness: str | None =
         if harness == "cursor" and enable_mcp:
             bridge_kwargs["enable_mcp"] = True
 
+        # Add task_id for subscription bridge (for comprehensive logging)
+        if harness == "claude-sub":
+            bridge_kwargs["task_id"] = task_id
+            bridge_kwargs["append_system_prompt"] = not no_append_prompt
+
         bridge = bridge_class(**bridge_kwargs)
 
         task_md = workspace_dir / "TASK.md"
@@ -124,18 +133,46 @@ def run_task(task_id: str, model: str, timeout: int = 300, harness: str | None =
         # Preserve logs before cleanup
         log_dir = base_dir / "results" / "logs"
         log_dir.mkdir(parents=True, exist_ok=True)
+        timestamp = time.strftime("%Y%m%d_%H%M%S")
+        harness_name = harness or "unknown"
+        safe_model = model.replace("/", "_")
 
-        # Find and save the harness log file
-        log_patterns = [".ralph_log.txt", ".codex_ralph_log.txt", ".aider_ralph_log.txt", ".cursor_ralph_log.txt"]
-        for pattern in log_patterns:
+        # Save the ralph progress log file
+        ralph_log_patterns = [
+            ".ralph_log.txt",
+            ".codex_ralph_log.txt",
+            ".aider_ralph_log.txt",
+            ".cursor_ralph_log.txt",
+            ".claude_subscription_log.txt",  # Subscription bridge log
+        ]
+        for pattern in ralph_log_patterns:
             log_file = workspace_dir / pattern
             if log_file.exists():
-                timestamp = time.strftime("%Y%m%d_%H%M%S")
-                harness_name = harness or "unknown"
-                safe_model = model.replace("/", "_")
                 dest_name = f"{harness_name}_{safe_model}_{task_id}_{timestamp}.log"
                 shutil.copy(log_file, log_dir / dest_name)
                 break
+
+        # For subscription bridge: copy structured JSON result (primary output)
+        # This is the main result file with conversation log and workspace files
+        for json_file in workspace_dir.glob("*.json"):
+            if json_file.is_file() and not json_file.name.startswith("."):
+                # Keep original name which includes task_id, model, timestamp
+                shutil.copy(json_file, log_dir / json_file.name)
+
+        # For non-subscription bridges: save conversation/chat logs
+        # (subscription bridge puts everything in the JSON result)
+        if harness != "claude-sub":
+            conversation_patterns = [
+                ".claude_conversation_iter*.jsonl",       # Claude Code stream-json logs
+                ".cursor_conversation_iter*.json",        # Cursor chat logs
+                ".codex_conversation_iter*.jsonl",        # Codex chat logs
+                ".aider.chat.history.md",                 # Aider chat history
+            ]
+            for pattern in conversation_patterns:
+                for conv_file in workspace_dir.glob(pattern):
+                    if conv_file.is_file():
+                        dest_name = f"{harness_name}_{safe_model}_{task_id}_{timestamp}_{conv_file.name}"
+                        shutil.copy(conv_file, log_dir / dest_name)
 
         return {
             "task": task_id,
@@ -162,6 +199,7 @@ def get_harness_id(bridge_class, explicit_harness: str | None) -> str:
         "CodexRalphLoopBridge": "codex",
         "ClaudeRalphLoopBridge": "claude-code",
         "RalphLoopBridge": "claude-code",
+        "ClaudeCodeSubscriptionBridge": "claude-sub",
         "AiderRalphLoopBridge": "aider",
         "CursorRalphLoopBridge": "cursor",
     }
@@ -181,7 +219,7 @@ def main():
     import argparse
     parser = argparse.ArgumentParser(description="Run DDS benchmark suite")
     parser.add_argument("--model", default="openai/gpt-5.2-codex", help="Model to use")
-    parser.add_argument("--harness", choices=["aider", "codex", "claude-code", "cursor"], help="Harness to use (auto-detect if not specified)")
+    parser.add_argument("--harness", choices=["aider", "codex", "claude-code", "claude-sub", "cursor"], help="Harness to use (auto-detect if not specified). claude-sub uses subscription (no API key)")
     parser.add_argument("--workers", type=int, default=4, help="Parallel workers")
     parser.add_argument("--timeout", type=int, default=300, help="Per-task timeout")
     parser.add_argument("--max-iterations", type=int, default=10, help="Max iterations per task")
@@ -190,6 +228,7 @@ def main():
     parser.add_argument("--tasks", type=str, help="Comma-separated list of task IDs to run")
     parser.add_argument("--list-tasks", action="store_true", help="List all available tasks and exit")
     parser.add_argument("--mcp", action="store_true", help="Enable MCP (ConnextAI) for DDS assistance (Cursor only, requires VPN)")
+    parser.add_argument("--no-append-prompt", action="store_true", help="Disable appended system prompt for claude-sub (for comparing with/without)")
     args = parser.parse_args()
 
     # List tasks and exit
@@ -234,8 +273,12 @@ def main():
         tasks_to_run = DDS_TASKS
 
     # Determine which harness will be used
-    # Map 'claude-code' arg to 'claude' for get_bridge_class
-    harness_arg = "claude" if args.harness == "claude-code" else args.harness
+    # Map arg names to get_bridge_class names
+    harness_map = {
+        "claude-code": "claude",
+        "claude-sub": "claude-sub",
+    }
+    harness_arg = harness_map.get(args.harness, args.harness)
     bridge_class = get_bridge_class(args.model, harness_arg)
     harness_id = get_harness_id(bridge_class, args.harness)
 
@@ -253,7 +296,7 @@ def main():
         print(f"MCP: Enabled (ConnextAI DDS assistance)")
 
     with ThreadPoolExecutor(max_workers=args.workers) as executor:
-        futures = {executor.submit(run_task, task, args.model, args.timeout, harness_arg, args.max_iterations, args.mcp): task for task in tasks_to_run}
+        futures = {executor.submit(run_task, task, args.model, args.timeout, harness_arg, args.max_iterations, args.mcp, args.no_append_prompt): task for task in tasks_to_run}
 
         for future in as_completed(futures):
             task_id = futures[future]
