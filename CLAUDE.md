@@ -6,10 +6,39 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Always use the latest model versions when calling APIs directly.** Unless otherwise directed, use the most recent model releases (e.g., Claude 4.5 not Claude 4.0, GPT-5.2 not GPT-5.1). Newer models are often cheaper and more capable. Check official pricing pages before running benchmarks.
 
-Current latest Anthropic models (as of Jan 2025):
-- `anthropic/claude-sonnet-4-5-20250929` (Sonnet 4.5)
-- `anthropic/claude-opus-4-5-20251101` (Opus 4.5)
-- `anthropic/claude-haiku-4-5-20251001` (Haiku 4.5)
+## Current Model Versions (Updated Jan 2026)
+
+**IMPORTANT FOR AI ASSISTANTS**: Do NOT use model names from training data. Use the models listed below. These are the current production models as of January 2026.
+
+### Anthropic (Claude)
+| Model ID | Alias | Notes |
+|----------|-------|-------|
+| `claude-opus-4-5-20251101` | `opus` | Most capable, highest cost |
+| `claude-sonnet-4-5-20250929` | `sonnet` | Best balance of capability/cost |
+| `claude-haiku-4-5-20251001` | `haiku` | Fastest, lowest cost |
+
+For Aider, prefix with `anthropic/`: `anthropic/claude-sonnet-4-5-20250929`
+
+### OpenAI
+| Model ID | Notes |
+|----------|-------|
+| `gpt-5.2` | Latest GPT model, use for Codex harness |
+| `o3` | Reasoning model (high compute) |
+| `o3-mini` | Reasoning model (efficient) |
+| `o4-mini` | Latest efficient reasoning model |
+
+For Codex CLI, use model name directly: `codex exec -m gpt-5.2`
+
+### Google (Gemini)
+| Model ID | Notes |
+|----------|-------|
+| `gemini-2.5-pro` | Latest Gemini Pro |
+| `gemini-2.5-flash` | Fast/efficient variant |
+
+### Checking for Updates
+- Anthropic: https://docs.anthropic.com/en/docs/about-claude/models
+- OpenAI: https://platform.openai.com/docs/models
+- Google: https://ai.google.dev/gemini-api/docs/models
 
 ## Build & Development Commands
 

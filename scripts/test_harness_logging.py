@@ -172,7 +172,7 @@ def main():
         "claude-code": "sonnet",  # Claude API
         "claude-sub": "sonnet",   # Claude Subscription
         "aider": "anthropic/claude-sonnet-4-5-20250929",  # Aider with Claude
-        "codex": "o3-mini",       # OpenAI Codex
+        "codex": "gpt-5.2",       # OpenAI Codex (use latest GPT, not reasoning models)
         # "cursor": "claude-sonnet-4-5",  # Skip cursor - requires GUI setup
     }
 
