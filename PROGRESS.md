@@ -1,6 +1,38 @@
 # Harness Bench Progress
 
-Last updated: 2026-01-22
+Last updated: 2026-01-22 (afternoon)
+
+## Latest Benchmark Run (Jan 22, 2026)
+
+Full benchmark suite completed across Claude Code (API + Subscription) and Aider with all Claude 4.5 models.
+
+### Results Summary
+
+| Harness | Model | Passed | Rate | Cost |
+|---------|-------|--------|------|------|
+| claude-code (API) | opus | 11/13 | 84.6% | $5.40 |
+| claude-code (API) | sonnet | 12/13 | 92.3% | $3.76 |
+| claude-code (API) | haiku | 9/13 | 69.2% | $2.36 |
+| claude-sub | opus | 12/13 | 92.3% | $1.69 |
+| claude-sub | sonnet | 8/13 | 61.5% | $0.34 |
+| claude-sub | haiku | 8/13 | 61.5% | $0.10 |
+| aider | opus | 12/13 | 92.3% | $2.30 |
+| aider | sonnet | 9/13 | 69.2% | $0.76 |
+| aider | haiku | 0/13 | 0.0% | $0.00 |
+
+**Total: 81/117 tests passed (69.2%)**
+
+### Key Findings
+
+1. **Best performers (92.3%):** Claude Code API Sonnet, Claude Sub Opus, Aider Opus
+2. **Subscription Opus passed LD-07** - the only configuration to pass discovery GUID mining (all API models failed)
+3. **Aider + Haiku catastrophic failure** - Hit stagnation circuit breaker on every task (no meaningful code changes produced)
+4. **Cost efficiency:** Claude Sub Haiku at $0.0125/pass is most cost-effective
+
+### Known Issues
+
+- **Timeout cost reporting:** Shows $0.00 when process killed before returning cost (TODO: calculate from logs)
+- **Aider + Haiku:** Model produces responses too quickly without substantive file changes, triggering circuit breaker
 
 ## Recent Changes (Jan 22, 2026)
 
