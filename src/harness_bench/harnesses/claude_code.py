@@ -1200,21 +1200,13 @@ class ClaudeCodeSubscriptionBridge(RalphLoopBase):
     def _init_result_tracking(self, task_prompt: str) -> None:
         """Initialize structured result tracking.
 
-        Sets up conversation log with turn 0 (instructions).
+        Delegates to base class to capture initial files and set up turn 0.
 
         Args:
             task_prompt: The original task prompt
         """
-        import datetime
-        self._started_timestamp = datetime.datetime.now().isoformat()
-
-        # Turn 0: instructions
-        self._conversation_log.append({
-            "turn": 0,
-            "role": "instructions",
-            "source": "TASK.md",
-            "content": task_prompt,
-        })
+        # Call base class to capture initial files and set up turn 0
+        super()._init_result_tracking(task_prompt)
 
     def _clean_pane_output(self, raw_output: str) -> str:
         """Clean up tmux pane capture to remove terminal chrome.
@@ -1259,34 +1251,29 @@ class ClaudeCodeSubscriptionBridge(RalphLoopBase):
 
         return '\n'.join(cleaned_lines).strip()
 
-    def _log_coder_turn(self, response: str, iteration_cost: float, elapsed: float) -> None:
+    def _log_coder_turn(
+        self,
+        response: str,
+        iteration_cost: float,
+        elapsed: float,
+        tool_calls: list[dict] | None = None,
+    ) -> None:
         """Log a coder turn with response and workspace files.
+
+        Overrides base to clean terminal chrome from pane capture.
+        Uses same key names as base class for consistency.
 
         Args:
             response: Claude's full response (pane capture)
             iteration_cost: Cost for this iteration in USD
             elapsed: Elapsed time in seconds
+            tool_calls: Optional list of tool calls (unused, for signature compat)
         """
         # Clean up the pane output to remove terminal chrome
         cleaned_response = self._clean_pane_output(response)
 
-        # Capture current workspace files (excluding hidden files and temp files)
-        workspace_files = {}
-        for f in self.workspace.iterdir():
-            if f.is_file() and not f.name.startswith(".") and f.suffix in (".py", ".md", ".txt", ".json", ".yaml", ".yml", ".idl", ".xml"):
-                try:
-                    workspace_files[f.name] = f.read_text()
-                except Exception:
-                    pass
-
-        self._conversation_log.append({
-            "turn": self.iteration,
-            "role": "coder",
-            "claude_output": cleaned_response,
-            "iteration_cost_usd": iteration_cost,
-            "elapsed_seconds": elapsed,
-            "workspace_files": workspace_files,
-        })
+        # Call base class with cleaned response
+        super()._log_coder_turn(cleaned_response, iteration_cost, elapsed, tool_calls)
 
     # Critical checkpoints that determine pass/fail (others are informational)
     CRITICAL_CHECKPOINTS = {

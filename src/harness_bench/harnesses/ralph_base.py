@@ -90,6 +90,7 @@ class RalphLoopBase(HarnessBridge):
         self._task_id: str | None = None
         self._last_verify_result: dict[str, Any] | None = None
         self._last_harness_response: str = ""  # Captured response from harness
+        self._initial_files: dict[str, str] = {}  # Files before model runs
 
     @property
     def log_filename(self) -> str:
@@ -178,22 +179,46 @@ class RalphLoopBase(HarnessBridge):
     # Structured Result Tracking (consistent JSON across all harnesses)
     # =========================================================================
 
+    def _capture_workspace_files(self) -> dict[str, str]:
+        """Capture all workspace files recursively.
+
+        Returns:
+            Dict mapping relative paths to file contents
+        """
+        files = {}
+        code_extensions = (".py", ".md", ".txt", ".json", ".yaml", ".yml", ".idl", ".xml", ".c", ".cpp", ".h", ".hpp")
+        for f in self.workspace.rglob("*"):
+            # Skip hidden files/directories
+            if f.is_file() and not any(p.startswith(".") for p in f.relative_to(self.workspace).parts):
+                if f.suffix in code_extensions:
+                    try:
+                        rel_path = str(f.relative_to(self.workspace))
+                        files[rel_path] = f.read_text()
+                    except Exception:
+                        pass
+        return files
+
     def _init_result_tracking(self, task_prompt: str) -> None:
         """Initialize structured result tracking.
 
-        Sets up conversation log with turn 0 (instructions).
+        Sets up conversation log with turn 0 (instructions) and captures
+        initial file state for tracking file provenance.
 
         Args:
             task_prompt: The original task prompt
         """
         self._started_timestamp = datetime.datetime.now().isoformat()
 
-        # Turn 0: instructions
+        # Capture initial workspace state (files provided by task/harness)
+        self._initial_files = self._capture_workspace_files()
+
+        # Turn 0: instructions with initial files
         self._conversation_log.append({
             "turn": 0,
             "role": "instructions",
             "source": "TASK.md",
             "content": task_prompt,
+            "initial_files": self._initial_files,  # Files provided before model runs
         })
 
     def _log_coder_turn(
@@ -205,21 +230,31 @@ class RalphLoopBase(HarnessBridge):
     ) -> None:
         """Log a coder turn with response and workspace files.
 
+        Tracks file provenance: created, modified, or unchanged from initial state.
+
         Args:
             response: The harness response (stdout or captured conversation)
             iteration_cost: Cost for this iteration in USD
             elapsed: Elapsed time in seconds
             tool_calls: Optional list of tool calls made (for harnesses that track them)
         """
-        # Capture current workspace files (excluding hidden files and temp files)
-        workspace_files = {}
-        code_extensions = (".py", ".md", ".txt", ".json", ".yaml", ".yml", ".idl", ".xml", ".c", ".cpp", ".h", ".hpp")
-        for f in self.workspace.iterdir():
-            if f.is_file() and not f.name.startswith(".") and f.suffix in code_extensions:
-                try:
-                    workspace_files[f.name] = f.read_text()
-                except Exception:
-                    workspace_files[f.name] = "<error reading file>"
+        # Capture current workspace files
+        current_files = self._capture_workspace_files()
+
+        # Categorize files by provenance
+        files_created = {}    # New files created by model
+        files_modified = {}   # Existing files modified by model
+        files_unchanged = {}  # Existing files not modified
+
+        initial = getattr(self, '_initial_files', {})
+
+        for path, content in current_files.items():
+            if path not in initial:
+                files_created[path] = content
+            elif initial[path] != content:
+                files_modified[path] = content
+            else:
+                files_unchanged[path] = content
 
         turn_data = {
             "turn": self.iteration,
@@ -227,7 +262,10 @@ class RalphLoopBase(HarnessBridge):
             "harness_output": response,
             "iteration_cost_usd": iteration_cost,
             "elapsed_seconds": elapsed,
-            "workspace_files": workspace_files,
+            # File provenance tracking
+            "files_created": files_created,
+            "files_modified": files_modified,
+            "files_unchanged": files_unchanged,
         }
 
         # Add tool calls if provided
