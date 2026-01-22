@@ -1409,22 +1409,6 @@ class ClaudeCodeSubscriptionBridge(RalphLoopBase):
         self._log(f"Result JSON: {json_filename}")
         return json_path
 
-    def _run_verification(self) -> dict[str, Any]:
-        """Run verification script and log results to conversation log.
-
-        Overrides base class to add structured logging.
-
-        Returns:
-            Verification result dict
-        """
-        # Call parent implementation
-        verify_result = super()._run_verification()
-
-        # Log to conversation log (updates last coder turn with test_results)
-        self._log_verification_turn(verify_result)
-
-        return verify_result
-
     def _generate_session_id(self) -> str:
         """Generate a unique tmux session ID."""
         import uuid
@@ -1877,8 +1861,9 @@ exit 0
                         "completed": not timed_out,
                     }) + "\n")
 
-                # Store for comprehensive log
+                # Store for comprehensive log and base class result tracking
                 self._last_response = pane_output
+                self._last_harness_response = pane_output  # For base class _log_coder_turn
 
             except Exception as e:
                 self._log(f"Failed to capture pane: {e}", "WARN")
@@ -1890,8 +1875,7 @@ exit 0
                 iteration_cost = self._calculate_cost_from_transcript(transcript_path)
                 self.total_cost_usd += iteration_cost
 
-            # Step 7: Log this turn to conversation log (for JSON result)
-            self._log_coder_turn(pane_output, iteration_cost, elapsed)
+            # Note: Base class execute_task will call _log_coder_turn after verification
 
             if timed_out:
                 self._log(f"TIMEOUT after {timeout:.0f}s", "WARN")
