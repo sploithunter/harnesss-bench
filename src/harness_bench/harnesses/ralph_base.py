@@ -84,6 +84,13 @@ class RalphLoopBase(HarnessBridge):
         self.total_cost_usd = 0.0
         self._progress_log: list[str] = []
 
+        # Structured result tracking (consistent JSON format across all harnesses)
+        self._conversation_log: list[dict[str, Any]] = []
+        self._started_timestamp: str = ""
+        self._task_id: str | None = None
+        self._last_verify_result: dict[str, Any] | None = None
+        self._last_harness_response: str = ""  # Captured response from harness
+
     @property
     def log_filename(self) -> str:
         """Return the log filename for this harness."""
@@ -166,6 +173,138 @@ class RalphLoopBase(HarnessBridge):
             "stagnation_count": self.stagnation_count,
         }
         status_file.write_text(json.dumps(status, indent=2))
+
+    # =========================================================================
+    # Structured Result Tracking (consistent JSON across all harnesses)
+    # =========================================================================
+
+    def _init_result_tracking(self, task_prompt: str) -> None:
+        """Initialize structured result tracking.
+
+        Sets up conversation log with turn 0 (instructions).
+
+        Args:
+            task_prompt: The original task prompt
+        """
+        self._started_timestamp = datetime.datetime.now().isoformat()
+
+        # Turn 0: instructions
+        self._conversation_log.append({
+            "turn": 0,
+            "role": "instructions",
+            "source": "TASK.md",
+            "content": task_prompt,
+        })
+
+    def _log_coder_turn(
+        self,
+        response: str,
+        iteration_cost: float,
+        elapsed: float,
+        tool_calls: list[dict] | None = None,
+    ) -> None:
+        """Log a coder turn with response and workspace files.
+
+        Args:
+            response: The harness response (stdout or captured conversation)
+            iteration_cost: Cost for this iteration in USD
+            elapsed: Elapsed time in seconds
+            tool_calls: Optional list of tool calls made (for harnesses that track them)
+        """
+        # Capture current workspace files (excluding hidden files and temp files)
+        workspace_files = {}
+        code_extensions = (".py", ".md", ".txt", ".json", ".yaml", ".yml", ".idl", ".xml", ".c", ".cpp", ".h", ".hpp")
+        for f in self.workspace.iterdir():
+            if f.is_file() and not f.name.startswith(".") and f.suffix in code_extensions:
+                try:
+                    workspace_files[f.name] = f.read_text()
+                except Exception:
+                    workspace_files[f.name] = "<error reading file>"
+
+        turn_data = {
+            "turn": self.iteration,
+            "role": "coder",
+            "harness_output": response,
+            "iteration_cost_usd": iteration_cost,
+            "elapsed_seconds": elapsed,
+            "workspace_files": workspace_files,
+        }
+
+        # Add tool calls if provided
+        if tool_calls:
+            turn_data["tool_calls"] = tool_calls
+
+        # Add test results if we have them
+        if self._last_verify_result:
+            turn_data["test_results"] = self._last_verify_result
+
+        self._conversation_log.append(turn_data)
+
+    def _generate_result_json(self, success: bool, reason: str, elapsed_seconds: float) -> Path:
+        """Generate structured JSON result file.
+
+        This produces consistent output format across all harnesses for comparison.
+
+        Args:
+            success: Whether the task succeeded
+            reason: Reason for success/failure
+            elapsed_seconds: Total elapsed time
+
+        Returns:
+            Path to the generated JSON file
+        """
+        task_id = self._task_id or self.workspace.name or "unknown"
+        timestamp = datetime.datetime.now().isoformat()
+
+        # Extract verification data
+        samples_matched = 0
+        samples_expected = 0
+        verification_score = 0.0
+        if self._last_verify_result:
+            details = self._last_verify_result.get("details", {})
+            samples_matched = details.get("samples_received", 0)
+            verification_score = self._last_verify_result.get("score", 0.0)
+
+            # Extract samples_expected from checkpoint details
+            for cp in details.get("checkpoints", []):
+                if cp.get("name") == "samples_received":
+                    cp_details = cp.get("details", {})
+                    samples_expected = cp_details.get("expected", 0)
+                    break
+
+        # Build result structure - consistent format across all harnesses
+        result = {
+            "task_id": task_id,
+            "model": self.model or "unknown",
+            "harness": self.harness_id,
+            "success": success,
+            "reason": reason,
+            "samples_matched": samples_matched,
+            "samples_expected": samples_expected,
+            "verification_score": verification_score,
+            "total_iterations": self.iteration,
+            "total_cost_usd": round(self.total_cost_usd, 6),
+            "time_seconds": round(elapsed_seconds, 2),
+            "timestamp": self._started_timestamp,
+            "completed_at": timestamp,
+            "harness_version": getattr(self, 'harness_version', '1.0.0'),
+            "config": {
+                "max_iterations": self.max_iterations,
+                "total_timeout": self.total_timeout,
+                "stagnation_limit": self.stagnation_limit,
+            },
+            "conversation_log": self._conversation_log,
+        }
+
+        # Write JSON file
+        safe_model = (self.model or "unknown").replace("/", "_")
+        json_filename = f"{task_id}_{safe_model}_{timestamp.replace(':', '-')}.json"
+        json_path = self.workspace / json_filename
+        with open(json_path, "w") as f:
+            json.dump(result, f, indent=2)
+
+        self._log(f"Result JSON: {json_filename}")
+        return json_path
 
     def _build_base_prompt(self, task_prompt: str) -> str:
         """Build prompt with TASK.md and progress context.
@@ -420,6 +559,9 @@ class RalphLoopBase(HarnessBridge):
 
         Uses TOTAL timeout - iterations share the time budget.
 
+        Generates structured JSON result file with conversation log
+        for cross-harness comparison.
+
         Args:
             task_prompt: The task prompt from TASK.md
 
@@ -428,8 +570,9 @@ class RalphLoopBase(HarnessBridge):
         """
         self._start_time = time.time()
 
-        # Initialize state files
+        # Initialize state files and result tracking
         self._init_state_files()
+        self._init_result_tracking(task_prompt)
         self._log(f"{self.harness_id} Ralph loop started: max_iterations={self.max_iterations}, total_timeout={self.total_timeout}s")
         self._log(f"Workspace: {self.workspace}")
         self._log(f"Verify script: {self.verify_script}")
@@ -482,17 +625,36 @@ class RalphLoopBase(HarnessBridge):
                 verify_elapsed = time.time() - verify_start
                 self._log(f"Verification finished: elapsed={verify_elapsed:.1f}s")
 
+                # Store for result tracking
+                self._last_verify_result = verify_result
+
                 self._update_status(verify_result)
+
+                # Log this iteration to conversation log (after verification so we have results)
+                self._log_coder_turn(
+                    response=self._last_harness_response,
+                    iteration_cost=0.0,  # Subclasses can override to track cost
+                    elapsed=harness_elapsed,
+                )
 
                 if verify_result.get("success", False):
                     total_elapsed = time.time() - self._start_time
                     self._log(f"VERIFICATION PASSED! Total time: {total_elapsed:.1f}s", "SUCCESS")
                     self._progress_log.append("VERIFICATION PASSED!")
                     self.log_event(f"{self.harness_id}_ralph_success", {"iteration": self.iteration})
+                    # Generate result JSON before returning
+                    self._generate_result_json(success=True, reason="passed", elapsed_seconds=total_elapsed)
                     return True
 
                 # Log failure details for next iteration prompt
                 self._process_verification_failure(verify_result)
+            else:
+                # No verification script - still log the iteration
+                self._log_coder_turn(
+                    response=self._last_harness_response,
+                    iteration_cost=0.0,
+                    elapsed=harness_elapsed,
+                )
 
             iter_elapsed = time.time() - iter_start
             self._log(f"Iteration {self.iteration} complete: {iter_elapsed:.1f}s, remaining: {self._time_remaining():.0f}s")
@@ -500,4 +662,11 @@ class RalphLoopBase(HarnessBridge):
         total_elapsed = time.time() - self._start_time
         self._log(f"{self.harness_id} Ralph loop finished: iterations={self.iteration}, total_time={total_elapsed:.1f}s", "WARN")
         self.log_event(f"{self.harness_id}_ralph_max_iterations", {"iterations": self.iteration})
+
+        # Generate result JSON for failure case
+        reason = "max_iterations" if self.iteration >= self.max_iterations else "timeout"
+        if self.stagnation_count >= self.stagnation_limit:
+            reason = "stagnation"
+        self._generate_result_json(success=False, reason=reason, elapsed_seconds=total_elapsed)
+
         return False

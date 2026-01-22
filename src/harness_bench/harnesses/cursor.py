@@ -890,6 +890,9 @@ class CursorRalphLoopBridge(RalphLoopBase):
 
                 self._log(f"Cursor exit={returncode}, estimated_cost=${self.total_cost_usd:.4f}")
 
+                # Store response for result tracking
+                self._last_harness_response = stdout or ""
+
                 if returncode != 0 and stderr:
                     self._log(f"Stderr: {stderr[:500]}", "ERROR")
 

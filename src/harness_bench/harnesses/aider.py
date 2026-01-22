@@ -493,6 +493,9 @@ class AiderRalphLoopBridge(RalphLoopBase):
 
                 self._log(f"Aider exit={returncode}")
 
+                # Store response for result tracking
+                self._last_harness_response = stdout or ""
+
                 if returncode != 0 and stderr:
                     self._log(f"Stderr: {stderr[:500]}", "ERROR")
 

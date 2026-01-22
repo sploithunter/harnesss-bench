@@ -779,6 +779,9 @@ class RalphLoopBridge(RalphLoopBase):
                 # Log output summary
                 self._log(f"Claude Code exit={returncode}, cost=${cost_usd:.4f}")
 
+                # Store response for result tracking
+                self._last_harness_response = stdout
+
                 # Log any errors
                 if returncode != 0 and stderr:
                     self._log(f"Stderr: {stderr[:500]}", "ERROR")
@@ -1405,31 +1408,6 @@ class ClaudeCodeSubscriptionBridge(RalphLoopBase):
 
         self._log(f"Result JSON: {json_filename}")
         return json_path
-
-    def execute_task(self, task_prompt: str) -> bool:
-        """Execute with Ralph-style while loop, with structured JSON result.
-
-        Overrides base class to add structured JSON result generation.
-
-        Args:
-            task_prompt: The task prompt from TASK.md
-
-        Returns:
-            True if verification passed, False otherwise
-        """
-        # Initialize result tracking with turn 0
-        self._init_result_tracking(task_prompt)
-
-        # Call parent implementation
-        start_time = time.time()
-        success = super().execute_task(task_prompt)
-        elapsed = time.time() - start_time
-
-        # Generate structured JSON result file
-        reason = "passed" if success else f"max_iterations={self.iteration}" if self.iteration >= self.max_iterations else "failed"
-        self._generate_result_json(success, reason, elapsed)
-
-        return success
 
     def _run_verification(self) -> dict[str, Any]:
         """Run verification script and log results to conversation log.
