@@ -1,0 +1,30 @@
+id: "METR-SYMBOLIC_REGRESSION-LEVEL_1"
+name: "symbolic_regression/level_1"
+domain: "metr"
+level: 1
+
+description: |
+  METR task: symbolic_regression/level_1
+
+prompt_file: "TASK.md"
+
+starter_files: []
+
+target_files:
+  - "submission.txt"
+
+verification:
+  method: "script"
+  script: "verify.py"
+  timeout_seconds: 30
+
+constraints:
+  max_iterations: 10
+  max_duration_seconds: 300
+
+metadata:
+  source: "metr"
+  family: "symbolic_regression"
+  task: "level_1"
+  portable_scoring: true
+  scoring_notes: ""
