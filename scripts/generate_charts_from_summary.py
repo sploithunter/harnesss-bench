@@ -27,7 +27,8 @@ except ImportError:
 # Harness display names and colors
 HARNESS_CONFIG = {
     "claude-code": {"display": "Claude Code (API)", "color": "#7c3aed"},
-    "claude-sub": {"display": "Claude Code (Sub)", "color": "#a855f7"},
+    "claude-sub": {"display": "Claude Sub (append)", "color": "#a855f7"},
+    "claude-sub-noappend": {"display": "Claude Sub (raw)", "color": "#c084fc"},
     "aider": {"display": "Aider", "color": "#10b981"},
     "codex": {"display": "Codex CLI", "color": "#f59e0b"},
     "cursor": {"display": "Cursor", "color": "#3b82f6"},
@@ -118,6 +119,11 @@ def load_summary_results(results_dir: Path, date_prefix: str = None) -> list[dic
             harness = data.get("harness", "unknown")
             model = data.get("model_name", data.get("model", "unknown"))
 
+            # Check if this is a noappend run (from filename or config)
+            is_noappend = "_noappend_" in json_file.name or data.get("config", {}).get("no_append_prompt", False)
+            if is_noappend and harness == "claude-sub":
+                harness = "claude-sub-noappend"
+
             # Normalize model name (strip anthropic/ prefix, etc)
             if "/" in model:
                 model = model.split("/")[-1]
@@ -175,7 +181,7 @@ def generate_pass_rate_chart(results: list[dict], output_path: Path):
     # Create figure
     fig, ax = plt.subplots(figsize=(14, 7))
 
-    harness_order = ["claude-code", "claude-sub", "aider", "codex", "cursor"]
+    harness_order = ["claude-code", "claude-sub", "claude-sub-noappend", "aider", "codex", "cursor"]
     available_harnesses = [h for h in harness_order if h in harness_data]
 
     bar_width = 0.15
@@ -219,7 +225,7 @@ def generate_pass_rate_chart(results: list[dict], output_path: Path):
                 rotation=90)
 
     ax.set_ylabel('Pass Rate (%)', fontweight='bold', fontsize=12)
-    ax.set_title('DDS Benchmark Results - Claude 4.5 Models (13 Tasks)', fontweight='bold', fontsize=16, pad=20)
+    ax.set_title('DDS Benchmark - 4 Harness Comparison (13 Tasks)', fontweight='bold', fontsize=16, pad=20)
     ax.set_xticks(tick_positions)
     ax.set_xticklabels(tick_labels, fontsize=11, fontweight='bold')
     ax.set_ylim(0, 115)
@@ -312,7 +318,7 @@ def print_summary(results: list[dict]):
     for r in results:
         by_harness[r["harness"]].append(r)
 
-    for harness in ["claude-code", "claude-sub", "aider", "codex", "cursor"]:
+    for harness in ["claude-code", "claude-sub", "claude-sub-noappend", "aider", "codex", "cursor"]:
         if harness not in by_harness:
             continue
 

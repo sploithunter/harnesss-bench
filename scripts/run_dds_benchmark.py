@@ -324,9 +324,10 @@ def main():
     else:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         model_name = normalize_model_name(args.model)
-        # Standardized naming: dds_benchmark_{harness}_{model}[_mcp]_{timestamp}.json
+        # Standardized naming: dds_benchmark_{harness}_{model}[_noappend][_mcp]_{timestamp}.json
+        noappend_suffix = "_noappend" if args.no_append_prompt else ""
         mcp_suffix = "_mcp" if args.mcp else ""
-        output_path = Path(f"results/dds_benchmark_{harness_id}_{model_name}{mcp_suffix}_{timestamp}.json")
+        output_path = Path(f"results/dds_benchmark_{harness_id}_{model_name}{noappend_suffix}{mcp_suffix}_{timestamp}.json")
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -342,6 +343,7 @@ def main():
             "max_iterations": args.max_iterations,
             "workers": args.workers,
             "mcp_enabled": args.mcp,
+            "no_append_prompt": args.no_append_prompt,
         },
         "total_tasks": len(tasks_to_run),
         "all_tasks_count": len(DDS_TASKS),
