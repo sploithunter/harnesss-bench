@@ -386,14 +386,18 @@ class RalphLoopBase(HarnessBridge):
         if not self.verify_script or not self.verify_script.exists():
             return {"success": False, "message": "No verification script"}
 
+        # Use absolute paths to ensure verify.py can find the workspace
+        workspace_abs = self.workspace.resolve()
+        verify_script_abs = self.verify_script.resolve()
+
         self._log(f"Running: python {self.verify_script.name} (timeout: {self.verify_timeout}s)")
         try:
             result = subprocess.run(
-                ["python", str(self.verify_script), str(self.workspace)],
+                ["python", str(verify_script_abs), str(workspace_abs)],
                 capture_output=True,
                 text=True,
                 timeout=self.verify_timeout,
-                cwd=self.workspace,
+                cwd=workspace_abs,
             )
             if result.stdout.strip():
                 parsed = json.loads(result.stdout.strip())

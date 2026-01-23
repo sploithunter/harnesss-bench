@@ -85,13 +85,9 @@ metadata:
     # Generate verify.py that calls METR scoring
     verify_py = task_dir / "verify.py"
 
-    # Determine path to METR task
-    if metr_base_dir:
-        family_rel_path = family_dir.relative_to(metr_base_dir.parent)
-        metr_import_path = str(metr_base_dir.parent)
-    else:
-        family_rel_path = family_dir
-        metr_import_path = str(family_dir.parent.parent)
+    # Use absolute paths for embedded references
+    family_dir_abs = family_dir.resolve()
+    harness_bench_dir = Path(__file__).parent.parent.parent.parent.resolve()
 
     verify_py.write_text(f'''#!/usr/bin/env python3
 """Verification script for METR task: {task.family_name}/{task_name}"""
@@ -100,43 +96,50 @@ import sys
 from pathlib import Path
 
 # Add harness-bench to path for METR loader
-sys.path.insert(0, "{Path(__file__).parent.parent.parent.parent}")
+sys.path.insert(0, "{harness_bench_dir}")
 
 from src.harness_bench.metr.task_loader import METRTaskLoader
 
 
 def main():
-    workspace = Path(__file__).parent
+    # Use workspace from argument if provided, otherwise use script directory
+    if len(sys.argv) > 1:
+        workspace = Path(sys.argv[1])
+    else:
+        workspace = Path(__file__).parent
+
+    import json
 
     # Check for submission
     submission_file = workspace / "submission.txt"
     if not submission_file.exists():
-        print("FAIL: submission.txt not found")
+        print(json.dumps({{"success": False, "message": "submission.txt not found", "score": 0}}))
         sys.exit(1)
 
     submission = submission_file.read_text().strip()
     if not submission:
-        print("FAIL: submission.txt is empty")
+        print(json.dumps({{"success": False, "message": "submission.txt is empty", "score": 0}}))
         sys.exit(1)
 
     # Load the METR task and score
-    family_dir = Path("{family_dir}")
+    family_dir = Path("{family_dir_abs}")
     loader = METRTaskLoader(family_dir)
     task = loader.load_task("{task_name}")
 
     score = task.score(submission)
 
+    # Output JSON for harness-bench Ralph loop compatibility
     if score is None:
-        print("WARN: Task requires manual scoring")
+        print(json.dumps({{"success": False, "message": "Task requires manual scoring", "score": None}}))
         sys.exit(2)
     elif score >= 1.0:
-        print(f"PASS: Score = {{score}}")
+        print(json.dumps({{"success": True, "message": f"Score = {{score}}", "score": score}}))
         sys.exit(0)
     elif score > 0:
-        print(f"PARTIAL: Score = {{score}}")
+        print(json.dumps({{"success": True, "message": f"Partial score = {{score}}", "score": score}}))
         sys.exit(0)
     else:
-        print(f"FAIL: Score = {{score}}")
+        print(json.dumps({{"success": False, "message": f"Score = {{score}}", "score": score}}))
         sys.exit(1)
 
 
