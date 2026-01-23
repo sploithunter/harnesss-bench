@@ -28,8 +28,10 @@ class CodingAgentBridge(RalphLoopBase):
     - Standardized hook handling
 
     Prerequisites:
-    - coding-agent-bridge server running (default: http://127.0.0.1:4003)
-    - Run: coding-agent-bridge setup && coding-agent-bridge server
+    - coding-agent-bridge server running (default: http://127.0.0.1:4004)
+    - Run: coding-agent-bridge setup && coding-agent-bridge server --port 4004
+
+    Note: Port 4004 is used to avoid conflict with CIN-Interface on port 4003.
     """
 
     harness_id = "cab"  # Coding Agent Bridge
@@ -47,7 +49,7 @@ class CodingAgentBridge(RalphLoopBase):
         stagnation_limit: int = 3,
         verbose: bool = True,
         verify_timeout: int = 300,
-        cab_url: str = "http://127.0.0.1:4003",
+        cab_url: str = "http://127.0.0.1:4004",
         on_event: Callable[[dict], None] | None = None,
     ):
         """Initialize CAB bridge.
@@ -236,7 +238,7 @@ class CodingAgentBridge(RalphLoopBase):
         # Check server is running
         if not self._check_server():
             self._log("ERROR: coding-agent-bridge server not running", "ERROR")
-            self._log(f"Start it with: cd vendor/coding-agent-bridge && node bin/cli.js server", "ERROR")
+            self._log(f"Start it with: cd vendor/coding-agent-bridge && node bin/cli.js server --port 4004", "ERROR")
             raise RuntimeError("coding-agent-bridge server not running")
 
         # Start WebSocket for event streaming
