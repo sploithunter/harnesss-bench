@@ -108,17 +108,15 @@ def main():
     else:
         workspace = Path(__file__).parent
 
-    import json
-
     # Check for submission
     submission_file = workspace / "submission.txt"
     if not submission_file.exists():
-        print(json.dumps({{"success": False, "message": "submission.txt not found", "score": 0}}))
+        print("FAIL: submission.txt not found")
         sys.exit(1)
 
     submission = submission_file.read_text().strip()
     if not submission:
-        print(json.dumps({{"success": False, "message": "submission.txt is empty", "score": 0}}))
+        print("FAIL: submission.txt is empty")
         sys.exit(1)
 
     # Load the METR task and score
@@ -128,18 +126,18 @@ def main():
 
     score = task.score(submission)
 
-    # Output JSON for harness-bench Ralph loop compatibility
+    # Text output - Ralph loop will parse this
     if score is None:
-        print(json.dumps({{"success": False, "message": "Task requires manual scoring", "score": None}}))
+        print("WARN: Task requires manual scoring")
         sys.exit(2)
     elif score >= 1.0:
-        print(json.dumps({{"success": True, "message": f"Score = {{score}}", "score": score}}))
+        print(f"PASS: Score = {{score}}")
         sys.exit(0)
     elif score > 0:
-        print(json.dumps({{"success": True, "message": f"Partial score = {{score}}", "score": score}}))
+        print(f"PARTIAL: Score = {{score}}")
         sys.exit(0)
     else:
-        print(json.dumps({{"success": False, "message": f"Score = {{score}}", "score": score}}))
+        print(f"FAIL: Score = {{score}}")
         sys.exit(1)
 
 

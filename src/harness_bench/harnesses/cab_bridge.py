@@ -175,8 +175,13 @@ class CodingAgentBridge(RalphLoopBase):
                 timeout=30,
             )
             resp.raise_for_status()
-            session = resp.json()
-            return session.get("id")
+            data = resp.json()
+            # CAB API may return:
+            # - {"ok": true, "session": {"id": "...", ...}} or
+            # - {"id": "...", ...} directly
+            if "session" in data:
+                return data["session"].get("id")
+            return data.get("id")
         except Exception as e:
             self._log(f"Failed to create session: {e}", "ERROR")
             return None
@@ -290,9 +295,8 @@ class CodingAgentBridge(RalphLoopBase):
 
             if timed_out:
                 self._log(f"TIMEOUT after {timeout}s", "WARN")
-                return True, "timeout"
 
-            self._log(f"Completed in {elapsed:.1f}s")
+            self._log(f"{'Timed out' if timed_out else 'Completed'} in {elapsed:.1f}s")
 
             # Save events log
             events_file = self.workspace / f".cab_events_iter{self.iteration}.jsonl"
@@ -301,6 +305,11 @@ class CodingAgentBridge(RalphLoopBase):
                     f.write(json.dumps(event) + "\n")
             self._log(f"Saved {len(self._events)} events to {events_file.name}")
 
+            # Capture tmux conversation BEFORE cleanup
+            self._capture_conversation(session_id)
+
+            if timed_out:
+                return True, "timeout"
             return True, "completed"
 
         finally:
@@ -311,6 +320,49 @@ class CodingAgentBridge(RalphLoopBase):
             if self._session_id:
                 self._delete_session(self._session_id)
                 self._session_id = None
+
+    def _capture_conversation(self, session_id: str) -> None:
+        """Capture the full tmux conversation before cleanup."""
+        try:
+            # Get session info to find tmux session name
+            session = self._get_session(session_id)
+            if not session:
+                self._log("Cannot capture conversation: session not found", "WARN")
+                return
+
+            tmux_session = session.get("tmuxSession")
+            if not tmux_session:
+                self._log("Cannot capture conversation: no tmux session", "WARN")
+                return
+
+            # Capture tmux pane content (full scroll history)
+            result = subprocess.run(
+                ["tmux", "capture-pane", "-t", tmux_session, "-p", "-S", "-10000"],
+                capture_output=True,
+                text=True,
+            )
+
+            if result.returncode == 0:
+                # Save conversation log
+                conv_file = self.workspace / f".cab_conversation_iter{self.iteration}.txt"
+                conv_file.write_text(result.stdout)
+                self._log(f"Captured conversation: {conv_file.name} ({len(result.stdout)} chars)")
+
+                # Also save as JSONL for consistency
+                jsonl_file = self.workspace / f".cab_conversation_iter{self.iteration}.jsonl"
+                with open(jsonl_file, "w") as f:
+                    f.write(json.dumps({
+                        "type": "cab_session",
+                        "iteration": self.iteration,
+                        "timestamp": time.time(),
+                        "tmux_session": tmux_session,
+                        "content": result.stdout,
+                    }) + "\n")
+            else:
+                self._log(f"Failed to capture tmux pane: {result.stderr}", "WARN")
+
+        except Exception as e:
+            self._log(f"Error capturing conversation: {e}", "WARN")
 
 
 class ClaudeCabBridge(CodingAgentBridge):
