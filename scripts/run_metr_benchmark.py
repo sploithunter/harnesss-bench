@@ -13,7 +13,7 @@ from datetime import datetime
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from harness_bench.harnesses.claude_code import ClaudeCodeSubscriptionBridge
-from harness_bench.harnesses.codex import CodexRalphLoopBridge
+from harness_bench.harnesses.codex import CodexRalphLoopBridge, CodexSubscriptionBridge
 from harness_bench.harnesses.cab_bridge import ClaudeCabBridge, CodexCabBridge
 
 
@@ -98,6 +98,15 @@ def run_metr_task(
                 max_iterations=max_iterations,
                 verify_script=str(verify_script),
             )
+        elif harness == "codex-sub":
+            bridge = CodexSubscriptionBridge(
+                workspace=workspace_dir,
+                model=model,
+                total_timeout=timeout,
+                max_iterations=max_iterations,
+                verify_script=str(verify_script),
+                task_id=task_id,
+            )
         else:
             return {"task": task_id, "success": False, "error": f"Unknown harness: {harness}"}
 
@@ -142,8 +151,8 @@ def main():
     parser.add_argument("task_dirs", nargs="+", help="Task directories to run")
     parser.add_argument("-m", "--model", default="sonnet", help="Model to use")
     parser.add_argument("--harness", default="claude-sub",
-                       choices=["claude-sub", "codex", "claude-cab", "codex-cab"],
-                       help="Harness to use (cab variants use coding-agent-bridge)")
+                       choices=["claude-sub", "codex", "codex-sub", "claude-cab", "codex-cab"],
+                       help="Harness to use (sub=subscription/no API key, cab=coding-agent-bridge)")
     parser.add_argument("-t", "--timeout", type=int, default=300, help="Timeout per iteration")
     parser.add_argument("--max-iterations", type=int, default=5, help="Max iterations")
     parser.add_argument("-o", "--output", type=Path, help="Output directory for results")

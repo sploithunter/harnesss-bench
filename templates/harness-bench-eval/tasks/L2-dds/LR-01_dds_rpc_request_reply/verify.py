@@ -28,7 +28,7 @@ import rti.connextdds as dds
 import rti.types as idl
 from rti.rpc import Replier
 
-from harness_bench.evaluation import check_syntax
+from harness_bench.evaluation import check_syntax, check_dds_shmem
 
 
 # Define the types that the service uses
@@ -168,6 +168,17 @@ def verify() -> dict:
     }
 
     checkpoints = []
+
+    # Check DDS shared memory health (auto-cleans orphaned segments)
+    shmem = check_dds_shmem()
+    if shmem.get("cleanup"):
+        results["details"]["dds_shmem_cleanup"] = shmem["cleanup"]
+    if not shmem["ok"]:
+        results["message"] = shmem["warning"]
+        results["details"]["dds_shmem"] = shmem
+        checkpoints.append({"name": "dds_shmem", "passed": False, "details": shmem})
+        results["details"]["checkpoints"] = checkpoints
+        return results
 
     # Check client.py exists
     client_file = workspace / "client.py"

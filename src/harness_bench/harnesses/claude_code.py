@@ -1726,17 +1726,17 @@ exit 0
                 "If tests fail, debug and fix the issues. Only declare done when tests pass. "
                 "Be thorough: read files, write code, run tests, fix issues, repeat until success."
             )
-            # Quote the prompt to protect from shell interpretation (contains spaces)
-            claude_args.extend(["--append-system-prompt", f'"{append_prompt}"'])
+            # No manual quoting - shlex.join handles escaping when building the command
+            claude_args.extend(["--append-system-prompt", append_prompt])
 
-        # Add hooks via settings override for completion detection and logging
-        # Tool hooks use matcher: '*', generic hooks have no matcher
+        # Add hooks via settings file for completion detection and logging
+        # Writing to a file avoids all shell escaping issues with inline JSON
         tool_hook_entry = {
             "matcher": "*",  # Match all tools
-            "hooks": [{"type": "command", "command": str(hook_path_abs), "timeout": 10}]
+            "hooks": [{"type": "command", "command": str(hook_path_abs), "timeout": 30}]
         }
         generic_hook_entry = {
-            "hooks": [{"type": "command", "command": str(hook_path_abs), "timeout": 10}]
+            "hooks": [{"type": "command", "command": str(hook_path_abs), "timeout": 30}]
         }
         hooks_dict = {
             "hooks": {
@@ -1746,12 +1746,12 @@ exit 0
                 "PostToolUse": [tool_hook_entry],
             }
         }
-        hooks_json = json.dumps(hooks_dict)
-        # Single-quote the JSON to protect it from shell interpretation
-        claude_args.extend(["--settings", f"'{hooks_json}'"])
+        # Write hooks config to file (Claude Code --settings accepts a file path)
+        hooks_file = workspace_abs / ".harness_hooks_settings.json"
+        hooks_file.write_text(json.dumps(hooks_dict, indent=2))
+        claude_args.extend(["--settings", str(hooks_file.resolve())])
 
-        claude_cmd = f"claude {' '.join(claude_args)}"
-        self._log(f"Command: {claude_cmd}")
+        self._log(f"Command: claude {' '.join(claude_args[:4])}... (hooks in {hooks_file.name})")
 
         # Create tmux session in workspace directory (use absolute path)
         try:
@@ -1776,17 +1776,20 @@ exit 0
             # Step 1: Write full command to a runner script
             # The command with all args + settings JSON is too long for tmux send-keys
             # (causes terminal line buffer issues). Writing to a script file avoids this.
-            # Use absolute paths to ensure they work from any working directory
+            # Use shlex.join for proper shell escaping of all arguments
+            import shlex
             prompt_file_abs = prompt_file.resolve()
-            full_cmd = f"{claude_cmd} < '{prompt_file_abs}'"
+            claude_cmd_parts = ["claude"] + claude_args
+            full_cmd = shlex.join(claude_cmd_parts) + f" < {shlex.quote(str(prompt_file_abs))}"
             runner_script = workspace_abs / ".harness_runner.sh"
-            runner_script.write_text(f"#!/bin/bash\n{full_cmd}\n")
+            # Unset CLAUDECODE to avoid "cannot launch inside another session" error
+            runner_script.write_text(f"#!/bin/bash\nunset CLAUDECODE\n{full_cmd}\n")
             runner_script.chmod(0o755)
             runner_script_abs = runner_script.resolve()
             self._log(f"Starting Claude with runner script (cmd length: {len(full_cmd)})")
 
             subprocess.run(
-                ["tmux", "send-keys", "-t", session_id, f"'{runner_script_abs}'", "Enter"],
+                ["tmux", "send-keys", "-t", session_id, str(runner_script_abs), "Enter"],
                 check=True,
                 capture_output=True,
             )
@@ -1901,7 +1904,7 @@ exit 0
                 pass
 
             # Cleanup temp files (keep logs)
-            for temp_file in [hook_path, prompt_file]:
+            for temp_file in [hook_path, prompt_file, hooks_file]:
                 try:
                     if temp_file.exists():
                         temp_file.unlink()
@@ -2047,9 +2050,10 @@ exit 0
         """Get environment variables.
 
         For subscription mode, no API key required.
-        For API fallback, needs ANTHROPIC_API_KEY.
+        Removes CLAUDECODE env var to allow launching Claude Code from within
+        another Claude Code session (e.g., when running benchmarks from Claude Code).
         """
         env = os.environ.copy()
-        # Don't require API key for subscription mode
-        # The fallback will fail gracefully if no key and no tmux
+        # Remove CLAUDECODE var to avoid "cannot launch inside another session" error
+        env.pop("CLAUDECODE", None)
         return env

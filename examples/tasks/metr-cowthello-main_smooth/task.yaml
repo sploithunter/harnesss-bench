@@ -1,0 +1,30 @@
+id: "METR-COWTHELLO-MAIN_SMOOTH"
+name: "cowthello/main_smooth"
+domain: "metr"
+level: 1
+
+description: |
+  METR task: cowthello/main_smooth
+
+prompt_file: "TASK.md"
+
+starter_files: []
+
+target_files:
+  - "submission.txt"
+
+verification:
+  method: "script"
+  script: "verify.py"
+  timeout_seconds: 30
+
+constraints:
+  max_iterations: 10
+  max_duration_seconds: 300
+
+metadata:
+  source: "metr"
+  family: "cowthello"
+  task: "main_smooth"
+  portable_scoring: true
+  scoring_notes: ""
