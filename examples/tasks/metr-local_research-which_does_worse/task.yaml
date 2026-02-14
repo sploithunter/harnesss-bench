@@ -1,0 +1,30 @@
+id: "METR-LOCAL_RESEARCH-WHICH_DOES_WORSE"
+name: "local_research/which_does_worse"
+domain: "metr"
+level: 1
+
+description: |
+  METR task: local_research/which_does_worse
+
+prompt_file: "TASK.md"
+
+starter_files: []
+
+target_files:
+  - "submission.txt"
+
+verification:
+  method: "script"
+  script: "verify.py"
+  timeout_seconds: 30
+
+constraints:
+  max_iterations: 10
+  max_duration_seconds: 300
+
+metadata:
+  source: "metr"
+  family: "local_research"
+  task: "which_does_worse"
+  portable_scoring: true
+  scoring_notes: ""

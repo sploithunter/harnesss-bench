@@ -1421,8 +1421,9 @@ class ClaudeCodeSubscriptionBridge(RalphLoopBase):
         """
         import tempfile
 
-        # Create completion signal file path
+        # Create completion signal file path (use absolute path)
         completion_file = self.workspace / f".claude_complete_{self.iteration}"
+        completion_file_abs = completion_file.resolve()
 
         # Create hook script that touches completion file on Stop event
         hook_script = f'''#!/bin/bash
@@ -1431,10 +1432,10 @@ input=$(cat)
 hook_event=$(echo "$input" | jq -r '.hook_event_name // "unknown"')
 
 if [ "$hook_event" = "Stop" ] || [ "$hook_event" = "SessionEnd" ]; then
-    touch "{completion_file}"
+    touch "{completion_file_abs}"
 fi
 '''
-        hook_path = self.workspace / ".harness_completion_hook.sh"
+        hook_path = self.workspace.resolve() / ".harness_completion_hook.sh"
         hook_path.write_text(hook_script)
         hook_path.chmod(0o755)
 
@@ -1454,6 +1455,10 @@ fi
         Returns:
             Path to the hook script
         """
+        # Use absolute paths for all embedded paths in the script
+        workspace_abs = self.workspace.resolve()
+        completion_file_abs = completion_file.resolve()
+
         # Comprehensive hook modeled after CIN-Interface's vibecraft-hook.sh
         hook_script = f'''#!/bin/bash
 # Harness-bench Claude Code hook - captures full conversation with responses
@@ -1479,7 +1484,7 @@ if [ -z "$JQ" ]; then
     # Fallback: just signal completion without parsing
     read -r line
     if echo "$line" | grep -q '"Stop"\\|"SessionEnd"'; then
-        touch "{completion_file}"
+        touch "{completion_file_abs}"
     fi
     exit 0
 fi
@@ -1505,8 +1510,8 @@ else
 fi
 
 # Output files
-EVENTS_FILE="{self.workspace}/.claude_events_iter{self.iteration}.jsonl"
-TRANSCRIPT_LOG="{self.workspace}/.claude_full_transcript_iter{self.iteration}.jsonl"
+EVENTS_FILE="{workspace_abs}/.claude_events_iter{self.iteration}.jsonl"
+TRANSCRIPT_LOG="{workspace_abs}/.claude_full_transcript_iter{self.iteration}.jsonl"
 
 # Extract assistant response from transcript if available
 assistant_response=""
@@ -1568,7 +1573,7 @@ case "$hook_event" in
             '{{type: $type, timestamp: $ts, sessionId: $session, response: $response}}')
 
         # Signal completion
-        touch "{completion_file}"
+        touch "{completion_file_abs}"
 
         # Copy full transcript if available
         if [ -n "$transcript_path" ] && [ -f "$transcript_path" ]; then
@@ -1585,7 +1590,7 @@ case "$hook_event" in
             '{{type: $type, timestamp: $ts, sessionId: $session, response: $response}}')
 
         # Signal completion
-        touch "{completion_file}"
+        touch "{completion_file_abs}"
 
         # Copy full transcript if available
         if [ -n "$transcript_path" ] && [ -f "$transcript_path" ]; then
@@ -1614,7 +1619,7 @@ echo "$event" >> "$EVENTS_FILE"
 
 exit 0
 '''
-        hook_path = self.workspace / ".harness_hook.sh"
+        hook_path = workspace_abs / ".harness_hook.sh"
         hook_path.write_text(hook_script)
         hook_path.chmod(0o755)
         return hook_path
@@ -1686,12 +1691,17 @@ exit 0
             self._log("Install tmux: brew install tmux (macOS) or apt install tmux (Linux)", "ERROR")
             raise RuntimeError("tmux is required for ClaudeCodeSubscriptionBridge but was not found")
 
+        # Resolve workspace to absolute path for all operations
+        workspace_abs = self.workspace.resolve()
+
         # Setup completion detection via hooks
-        completion_file = self.workspace / f".claude_complete_{self.iteration}"
+        completion_file = workspace_abs / f".claude_complete_{self.iteration}"
         if completion_file.exists():
             completion_file.unlink()
 
         hook_path = self._setup_hooks(completion_file)
+        # Use absolute path for hooks to ensure Claude can find them regardless of working directory
+        hook_path_abs = hook_path.resolve()
 
         # Generate unique tmux session name
         session_id = self._generate_session_id()
@@ -1716,17 +1726,17 @@ exit 0
                 "If tests fail, debug and fix the issues. Only declare done when tests pass. "
                 "Be thorough: read files, write code, run tests, fix issues, repeat until success."
             )
-            # Quote the prompt to protect from shell interpretation (contains spaces)
-            claude_args.extend(["--append-system-prompt", f'"{append_prompt}"'])
+            # No manual quoting - shlex.join handles escaping when building the command
+            claude_args.extend(["--append-system-prompt", append_prompt])
 
-        # Add hooks via settings override for completion detection and logging
-        # Tool hooks use matcher: '*', generic hooks have no matcher
+        # Add hooks via settings file for completion detection and logging
+        # Writing to a file avoids all shell escaping issues with inline JSON
         tool_hook_entry = {
             "matcher": "*",  # Match all tools
-            "hooks": [{"type": "command", "command": str(hook_path), "timeout": 10}]
+            "hooks": [{"type": "command", "command": str(hook_path_abs), "timeout": 30}]
         }
         generic_hook_entry = {
-            "hooks": [{"type": "command", "command": str(hook_path), "timeout": 10}]
+            "hooks": [{"type": "command", "command": str(hook_path_abs), "timeout": 30}]
         }
         hooks_dict = {
             "hooks": {
@@ -1736,17 +1746,17 @@ exit 0
                 "PostToolUse": [tool_hook_entry],
             }
         }
-        hooks_json = json.dumps(hooks_dict)
-        # Single-quote the JSON to protect it from shell interpretation
-        claude_args.extend(["--settings", f"'{hooks_json}'"])
+        # Write hooks config to file (Claude Code --settings accepts a file path)
+        hooks_file = workspace_abs / ".harness_hooks_settings.json"
+        hooks_file.write_text(json.dumps(hooks_dict, indent=2))
+        claude_args.extend(["--settings", str(hooks_file.resolve())])
 
-        claude_cmd = f"claude {' '.join(claude_args)}"
-        self._log(f"Command: {claude_cmd}")
+        self._log(f"Command: claude {' '.join(claude_args[:4])}... (hooks in {hooks_file.name})")
 
-        # Create tmux session in workspace directory
+        # Create tmux session in workspace directory (use absolute path)
         try:
             subprocess.run(
-                ["tmux", "new-session", "-d", "-s", session_id, "-c", str(self.workspace)],
+                ["tmux", "new-session", "-d", "-s", session_id, "-c", str(workspace_abs)],
                 check=True,
                 capture_output=True,
             )
@@ -1756,24 +1766,30 @@ exit 0
             return False, f"tmux_create_failed: {e}"
 
         # Create conversation log file
-        conversation_log = self.workspace / f".claude_conversation_iter{self.iteration}.txt"
+        conversation_log = workspace_abs / f".claude_conversation_iter{self.iteration}.txt"
 
         # Save prompt to temp file for reliable delivery
-        prompt_file = self.workspace / ".harness_prompt.txt"
+        prompt_file = workspace_abs / ".harness_prompt.txt"
         prompt_file.write_text(prompt)
 
         try:
             # Step 1: Write full command to a runner script
             # The command with all args + settings JSON is too long for tmux send-keys
             # (causes terminal line buffer issues). Writing to a script file avoids this.
-            full_cmd = f"{claude_cmd} < '{prompt_file}'"
-            runner_script = self.workspace / ".harness_runner.sh"
-            runner_script.write_text(f"#!/bin/bash\n{full_cmd}\n")
+            # Use shlex.join for proper shell escaping of all arguments
+            import shlex
+            prompt_file_abs = prompt_file.resolve()
+            claude_cmd_parts = ["claude"] + claude_args
+            full_cmd = shlex.join(claude_cmd_parts) + f" < {shlex.quote(str(prompt_file_abs))}"
+            runner_script = workspace_abs / ".harness_runner.sh"
+            # Unset CLAUDECODE to avoid "cannot launch inside another session" error
+            runner_script.write_text(f"#!/bin/bash\nunset CLAUDECODE\n{full_cmd}\n")
             runner_script.chmod(0o755)
+            runner_script_abs = runner_script.resolve()
             self._log(f"Starting Claude with runner script (cmd length: {len(full_cmd)})")
 
             subprocess.run(
-                ["tmux", "send-keys", "-t", session_id, f"'{runner_script}'", "Enter"],
+                ["tmux", "send-keys", "-t", session_id, str(runner_script_abs), "Enter"],
                 check=True,
                 capture_output=True,
             )
@@ -1836,7 +1852,7 @@ exit 0
                 self._log(f"Conversation log saved: {conversation_log.name} ({len(pane_output)} chars)")
 
                 # Also save structured JSONL for consistency with other bridges
-                jsonl_log = self.workspace / f".claude_conversation_iter{self.iteration}.jsonl"
+                jsonl_log = workspace_abs / f".claude_conversation_iter{self.iteration}.jsonl"
                 with open(jsonl_log, 'w') as f:
                     f.write(json.dumps({
                         "type": "interactive_session",
@@ -1888,7 +1904,7 @@ exit 0
                 pass
 
             # Cleanup temp files (keep logs)
-            for temp_file in [hook_path, prompt_file]:
+            for temp_file in [hook_path, prompt_file, hooks_file]:
                 try:
                     if temp_file.exists():
                         temp_file.unlink()
@@ -2034,9 +2050,10 @@ exit 0
         """Get environment variables.
 
         For subscription mode, no API key required.
-        For API fallback, needs ANTHROPIC_API_KEY.
+        Removes CLAUDECODE env var to allow launching Claude Code from within
+        another Claude Code session (e.g., when running benchmarks from Claude Code).
         """
         env = os.environ.copy()
-        # Don't require API key for subscription mode
-        # The fallback will fail gracefully if no key and no tmux
+        # Remove CLAUDECODE var to avoid "cannot launch inside another session" error
+        env.pop("CLAUDECODE", None)
         return env

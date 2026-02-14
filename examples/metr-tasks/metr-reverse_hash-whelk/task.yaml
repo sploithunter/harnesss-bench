@@ -1,0 +1,30 @@
+id: "METR-REVERSE_HASH-WHELK"
+name: "reverse_hash/whelk"
+domain: "metr"
+level: 1
+
+description: |
+  METR task: reverse_hash/whelk
+
+prompt_file: "TASK.md"
+
+starter_files: []
+
+target_files:
+  - "submission.txt"
+
+verification:
+  method: "script"
+  script: "verify.py"
+  timeout_seconds: 30
+
+constraints:
+  max_iterations: 10
+  max_duration_seconds: 300
+
+metadata:
+  source: "metr"
+  family: "reverse_hash"
+  task: "whelk"
+  portable_scoring: true
+  scoring_notes: ""

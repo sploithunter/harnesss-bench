@@ -1,0 +1,30 @@
+id: "METR-MACHINE_LEARNING_LOCAL-SPEECH_COMMANDS"
+name: "machine_learning_local/speech_commands"
+domain: "metr"
+level: 1
+
+description: |
+  METR task: machine_learning_local/speech_commands
+
+prompt_file: "TASK.md"
+
+starter_files: []
+
+target_files:
+  - "submission.txt"
+
+verification:
+  method: "script"
+  script: "verify.py"
+  timeout_seconds: 30
+
+constraints:
+  max_iterations: 10
+  max_duration_seconds: 300
+
+metadata:
+  source: "metr"
+  family: "machine_learning_local"
+  task: "speech_commands"
+  portable_scoring: true
+  scoring_notes: ""

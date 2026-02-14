@@ -380,39 +380,102 @@ class RalphLoopBase(HarnessBridge):
     def _run_verification(self) -> dict[str, Any]:
         """Run verification script.
 
+        Handles both JSON output (preferred) and text output (METR tasks).
+        Text output is parsed for common patterns like PASS/FAIL and Score values.
+
         Returns:
-            Verification result dict with 'success', 'message', 'checkpoints', etc.
+            Verification result dict with 'success', 'message', 'score', etc.
         """
         if not self.verify_script or not self.verify_script.exists():
             return {"success": False, "message": "No verification script"}
 
+        # Use absolute paths to ensure verify.py can find the workspace
+        workspace_abs = self.workspace.resolve()
+        verify_script_abs = self.verify_script.resolve()
+
         self._log(f"Running: python {self.verify_script.name} (timeout: {self.verify_timeout}s)")
         try:
             result = subprocess.run(
-                ["python", str(self.verify_script), str(self.workspace)],
+                ["python", str(verify_script_abs), str(workspace_abs)],
                 capture_output=True,
                 text=True,
                 timeout=self.verify_timeout,
-                cwd=self.workspace,
+                cwd=workspace_abs,
             )
-            if result.stdout.strip():
-                parsed = json.loads(result.stdout.strip())
-                self._log(f"Verification result: success={parsed.get('success')}, score={parsed.get('score')}")
-                return parsed
+            output = result.stdout.strip()
+            if output:
+                # Try JSON first
+                try:
+                    parsed = json.loads(output)
+                    self._log(f"Verification result: success={parsed.get('success')}, score={parsed.get('score')}")
+                    return parsed
+                except json.JSONDecodeError:
+                    # Fall back to text parsing for METR-style output
+                    return self._parse_text_verification(output, result.returncode)
+
             self._log(
                 f"No output from verify.py, stderr: {result.stderr[:200] if result.stderr else 'none'}",
                 "ERROR"
             )
             return {"success": False, "message": result.stderr or "No output"}
-        except json.JSONDecodeError as e:
-            self._log(f"JSON decode error: {e}", "ERROR")
-            return {"success": False, "message": f"Invalid JSON: {str(e)}"}
         except subprocess.TimeoutExpired:
             self._log(f"Verification timed out after {self.verify_timeout}s", "ERROR")
             return {"success": False, "message": "Verification timed out"}
         except Exception as e:
             self._log(f"Verification error: {str(e)}", "ERROR")
             return {"success": False, "message": str(e)}
+
+    def _parse_text_verification(self, output: str, exit_code: int) -> dict[str, Any]:
+        """Parse text-based verification output (e.g., from METR tasks).
+
+        Recognizes patterns like:
+        - PASS / FAIL / PARTIAL
+        - Score = X.X
+        - exit code 0 = success, non-zero = failure
+
+        Args:
+            output: Text output from verify script
+            exit_code: Process exit code
+
+        Returns:
+            Verification result dict
+        """
+        import re
+
+        output_lower = output.lower()
+
+        # Extract score if present
+        score = None
+        score_match = re.search(r'score\s*[=:]\s*([\d.]+)', output_lower)
+        if score_match:
+            try:
+                score = float(score_match.group(1))
+            except ValueError:
+                pass
+
+        # Determine success based on keywords and exit code
+        if 'pass' in output_lower and 'fail' not in output_lower:
+            success = True
+        elif 'fail' in output_lower:
+            success = False
+        elif 'partial' in output_lower:
+            success = score is not None and score > 0
+        else:
+            # Fall back to exit code
+            success = exit_code == 0
+
+        # If we have a score, use it to determine success
+        if score is not None:
+            success = score >= 1.0 or (score > 0 and 'partial' in output_lower)
+
+        result = {
+            "success": success,
+            "message": output,
+            "score": score,
+        }
+
+        self._log(f"Verification result (text): success={success}, score={score}")
+        return result
 
     def _commit_if_changed(self) -> bool:
         """Commit if there are changes.

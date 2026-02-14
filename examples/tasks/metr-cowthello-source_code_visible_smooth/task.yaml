@@ -1,0 +1,30 @@
+id: "METR-COWTHELLO-SOURCE_CODE_VISIBLE_SMOOTH"
+name: "cowthello/source_code_visible_smooth"
+domain: "metr"
+level: 1
+
+description: |
+  METR task: cowthello/source_code_visible_smooth
+
+prompt_file: "TASK.md"
+
+starter_files: []
+
+target_files:
+  - "submission.txt"
+
+verification:
+  method: "script"
+  script: "verify.py"
+  timeout_seconds: 30
+
+constraints:
+  max_iterations: 10
+  max_duration_seconds: 300
+
+metadata:
+  source: "metr"
+  family: "cowthello"
+  task: "source_code_visible_smooth"
+  portable_scoring: true
+  scoring_notes: ""
