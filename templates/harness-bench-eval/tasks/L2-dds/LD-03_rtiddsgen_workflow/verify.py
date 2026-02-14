@@ -14,7 +14,7 @@ import sys
 import time
 from pathlib import Path
 
-from harness_bench.evaluation import preflight_check, check_syntax
+from harness_bench.evaluation import preflight_check, check_syntax, check_dds_shmem
 
 
 def verify() -> dict:
@@ -30,6 +30,17 @@ def verify() -> dict:
     }
 
     checkpoints = []
+
+    # Check DDS shared memory health (auto-cleans orphaned segments)
+    shmem = check_dds_shmem()
+    if shmem.get("cleanup"):
+        results["details"]["dds_shmem_cleanup"] = shmem["cleanup"]
+    if not shmem["ok"]:
+        results["message"] = shmem["warning"]
+        results["details"]["dds_shmem"] = shmem
+        checkpoints.append({"name": "dds_shmem", "passed": False, "details": shmem})
+        results["details"]["checkpoints"] = checkpoints
+        return results
 
     # Check for HelloWorld.idl
     idl_file = workspace / "HelloWorld.idl"

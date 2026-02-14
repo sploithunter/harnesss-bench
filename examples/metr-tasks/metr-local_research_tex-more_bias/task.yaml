@@ -1,0 +1,30 @@
+id: "METR-LOCAL_RESEARCH_TEX-MORE_BIAS"
+name: "local_research_tex/more_bias"
+domain: "metr"
+level: 1
+
+description: |
+  METR task: local_research_tex/more_bias
+
+prompt_file: "TASK.md"
+
+starter_files: []
+
+target_files:
+  - "submission.txt"
+
+verification:
+  method: "script"
+  script: "verify.py"
+  timeout_seconds: 30
+
+constraints:
+  max_iterations: 10
+  max_duration_seconds: 300
+
+metadata:
+  source: "metr"
+  family: "local_research_tex"
+  task: "more_bias"
+  portable_scoring: true
+  scoring_notes: ""

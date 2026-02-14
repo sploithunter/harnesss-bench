@@ -1,0 +1,30 @@
+id: "METR-REVERSE_HASH-QWERTY"
+name: "reverse_hash/qwerty"
+domain: "metr"
+level: 1
+
+description: |
+  METR task: reverse_hash/qwerty
+
+prompt_file: "TASK.md"
+
+starter_files: []
+
+target_files:
+  - "submission.txt"
+
+verification:
+  method: "script"
+  script: "verify.py"
+  timeout_seconds: 30
+
+constraints:
+  max_iterations: 10
+  max_duration_seconds: 300
+
+metadata:
+  source: "metr"
+  family: "reverse_hash"
+  task: "qwerty"
+  portable_scoring: true
+  scoring_notes: ""

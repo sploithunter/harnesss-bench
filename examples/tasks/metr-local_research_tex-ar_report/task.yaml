@@ -1,0 +1,30 @@
+id: "METR-LOCAL_RESEARCH_TEX-AR_REPORT"
+name: "local_research_tex/ar_report"
+domain: "metr"
+level: 1
+
+description: |
+  METR task: local_research_tex/ar_report
+
+prompt_file: "TASK.md"
+
+starter_files: []
+
+target_files:
+  - "submission.txt"
+
+verification:
+  method: "script"
+  script: "verify.py"
+  timeout_seconds: 30
+
+constraints:
+  max_iterations: 10
+  max_duration_seconds: 300
+
+metadata:
+  source: "metr"
+  family: "local_research_tex"
+  task: "ar_report"
+  portable_scoring: true
+  scoring_notes: ""

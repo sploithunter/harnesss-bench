@@ -336,6 +336,7 @@ class TaskRegistry:
 
         # Download TASK.md (prompt)
         prompt_file = task_config.get("prompt_file", "TASK.md")
+        self._validate_path(prompt_file, output_dir)
         try:
             prompt_content = self._fetch_url(f"{task_base_url}/{prompt_file}")
             (output_dir / prompt_file).write_text(prompt_content)
@@ -345,6 +346,7 @@ class TaskRegistry:
 
         # Download starter files
         for starter_file in task_config.get("starter_files", []):
+            self._validate_path(starter_file, output_dir)
             try:
                 content = self._fetch_url(f"{task_base_url}/{starter_file}")
                 dest = output_dir / starter_file
@@ -366,6 +368,29 @@ class TaskRegistry:
             self._verify_checksum(output_dir, entry.checksum)
 
         return output_dir
+
+    @staticmethod
+    def _validate_path(filename: str, output_dir: Path) -> None:
+        """Validate that a filename does not escape the output directory.
+
+        Args:
+            filename: Filename or relative path from task config
+            output_dir: Target directory that must contain the resolved path
+
+        Raises:
+            ValueError: If the path is absolute or escapes output_dir
+        """
+        if Path(filename).is_absolute():
+            raise ValueError(
+                f"Absolute path not allowed in task config: {filename!r}"
+            )
+        resolved = (output_dir / filename).resolve()
+        output_resolved = output_dir.resolve()
+        if not str(resolved).startswith(str(output_resolved) + "/") and resolved != output_resolved:
+            raise ValueError(
+                f"Path traversal detected in task config: {filename!r} "
+                f"resolves outside output directory"
+            )
 
     def _fetch_url(self, url: str) -> str:
         """Fetch content from URL.
