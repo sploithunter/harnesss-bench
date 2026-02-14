@@ -4,6 +4,7 @@
 import sys
 import os
 import shutil
+import subprocess
 import tempfile
 import json
 import time
@@ -100,7 +101,9 @@ def run_task(task_id: str, model: str, timeout: int = 300, harness: str | None =
                 shutil.copy(f, workspace_dir / f.name)
 
         # Initialize git
-        os.system(f"cd {workspace_dir} && git init && git add . && git commit -m 'Initial' 2>/dev/null")
+        subprocess.run(["git", "init"], cwd=workspace_dir, capture_output=True, check=True)
+        subprocess.run(["git", "add", "."], cwd=workspace_dir, capture_output=True, check=True)
+        subprocess.run(["git", "commit", "-m", "Initial"], cwd=workspace_dir, capture_output=True, check=True)
 
         # Select and run bridge
         bridge_class = get_bridge_class(model, harness)

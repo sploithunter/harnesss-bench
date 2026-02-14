@@ -4,6 +4,7 @@
 import sys
 import os
 import shutil
+import subprocess
 import tempfile
 import json
 import time
@@ -63,7 +64,9 @@ def run_metr_task(
                 shutil.copy(f, workspace_dir / f.name)
 
         # Initialize git
-        os.system(f"cd {workspace_dir} && git init && git add . && git commit -m 'Initial task setup' 2>/dev/null")
+        subprocess.run(["git", "init"], cwd=workspace_dir, capture_output=True, check=True)
+        subprocess.run(["git", "add", "."], cwd=workspace_dir, capture_output=True, check=True)
+        subprocess.run(["git", "commit", "-m", "Initial task setup"], cwd=workspace_dir, capture_output=True, check=True)
 
         # Select bridge
         if harness == "claude-sub":
