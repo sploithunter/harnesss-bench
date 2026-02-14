@@ -5,7 +5,7 @@ from .local_evaluator import LocalEvaluator, LocalEvaluationResult
 from .verifier import Verifier, VerificationResult
 from .metrics import RunMetrics
 from .llm_scorer import LLMScorer, AnthropicScorer, OpenAIScorer, create_scorer
-from .preflight import preflight_check, preflight_scripts, check_syntax
+from .preflight import preflight_check, preflight_scripts, check_syntax, check_dds_shmem, cleanup_dds_shmem
 
 __all__ = [
     "Evaluator",
@@ -22,4 +22,6 @@ __all__ = [
     "preflight_check",
     "preflight_scripts",
     "check_syntax",
+    "check_dds_shmem",
+    "cleanup_dds_shmem",
 ]

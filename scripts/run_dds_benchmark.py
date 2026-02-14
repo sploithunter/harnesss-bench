@@ -4,6 +4,7 @@
 import sys
 import os
 import shutil
+import subprocess
 import tempfile
 import json
 import time
@@ -14,7 +15,7 @@ from datetime import datetime
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from harness_bench.harnesses.aider import AiderRalphLoopBridge
-from harness_bench.harnesses.codex import CodexRalphLoopBridge
+from harness_bench.harnesses.codex import CodexRalphLoopBridge, CodexSubscriptionBridge
 from harness_bench.harnesses.claude_code import RalphLoopBridge as ClaudeRalphLoopBridge
 from harness_bench.harnesses.claude_code import ClaudeCodeSubscriptionBridge
 from harness_bench.harnesses.cursor import CursorRalphLoopBridge
@@ -43,7 +44,7 @@ def get_bridge_class(model: str, harness: str | None = None):
 
     Args:
         model: Model identifier (e.g., 'anthropic/claude-sonnet-4-5', 'openai/o3-mini')
-        harness: Explicit harness choice ('aider', 'codex', 'claude', 'claude-sub', 'cursor')
+        harness: Explicit harness choice ('aider', 'codex', 'codex-sub', 'claude', 'claude-sub', 'cursor')
 
     Returns:
         Bridge class to use
@@ -54,6 +55,9 @@ def get_bridge_class(model: str, harness: str | None = None):
     if harness:
         if harness == "codex":
             return CodexRalphLoopBridge
+        elif harness == "codex-sub":
+            # Subscription-based Codex (no API key, uses tmux + session monitoring)
+            return CodexSubscriptionBridge
         elif harness == "claude":
             return ClaudeRalphLoopBridge
         elif harness == "claude-sub":
@@ -97,7 +101,9 @@ def run_task(task_id: str, model: str, timeout: int = 300, harness: str | None =
                 shutil.copy(f, workspace_dir / f.name)
 
         # Initialize git
-        os.system(f"cd {workspace_dir} && git init && git add . && git commit -m 'Initial' 2>/dev/null")
+        subprocess.run(["git", "init"], cwd=workspace_dir, capture_output=True, check=True)
+        subprocess.run(["git", "add", "."], cwd=workspace_dir, capture_output=True, check=True)
+        subprocess.run(["git", "commit", "-m", "Initial"], cwd=workspace_dir, capture_output=True, check=True)
 
         # Select and run bridge
         bridge_class = get_bridge_class(model, harness)
@@ -116,10 +122,12 @@ def run_task(task_id: str, model: str, timeout: int = 300, harness: str | None =
         if harness == "cursor" and enable_mcp:
             bridge_kwargs["enable_mcp"] = True
 
-        # Add task_id for subscription bridge (for comprehensive logging)
+        # Add task_id for subscription bridges (for comprehensive logging)
         if harness == "claude-sub":
             bridge_kwargs["task_id"] = task_id
             bridge_kwargs["append_system_prompt"] = not no_append_prompt
+        elif harness == "codex-sub":
+            bridge_kwargs["task_id"] = task_id
 
         bridge = bridge_class(**bridge_kwargs)
 
@@ -141,9 +149,10 @@ def run_task(task_id: str, model: str, timeout: int = 300, harness: str | None =
         ralph_log_patterns = [
             ".ralph_log.txt",
             ".codex_ralph_log.txt",
+            ".codex_subscription_log.txt",   # Codex subscription bridge log
             ".aider_ralph_log.txt",
             ".cursor_ralph_log.txt",
-            ".claude_subscription_log.txt",  # Subscription bridge log
+            ".claude_subscription_log.txt",  # Claude subscription bridge log
         ]
         for pattern in ralph_log_patterns:
             log_file = workspace_dir / pattern
@@ -160,8 +169,8 @@ def run_task(task_id: str, model: str, timeout: int = 300, harness: str | None =
                 shutil.copy(json_file, log_dir / json_file.name)
 
         # For non-subscription bridges: save conversation/chat logs
-        # (subscription bridge puts everything in the JSON result)
-        if harness != "claude-sub":
+        # (subscription bridges put everything in the JSON result)
+        if harness not in ("claude-sub", "codex-sub"):
             conversation_patterns = [
                 ".claude_conversation_iter*.jsonl",       # Claude Code stream-json logs
                 ".cursor_conversation_iter*.json",        # Cursor chat logs
@@ -197,6 +206,7 @@ def get_harness_id(bridge_class, explicit_harness: str | None) -> str:
     # Map bridge class to harness ID
     class_to_harness = {
         "CodexRalphLoopBridge": "codex",
+        "CodexSubscriptionBridge": "codex-sub",
         "ClaudeRalphLoopBridge": "claude-code",
         "RalphLoopBridge": "claude-code",
         "ClaudeCodeSubscriptionBridge": "claude-sub",
@@ -219,7 +229,7 @@ def main():
     import argparse
     parser = argparse.ArgumentParser(description="Run DDS benchmark suite")
     parser.add_argument("--model", default="openai/gpt-5.2-codex", help="Model to use")
-    parser.add_argument("--harness", choices=["aider", "codex", "claude-code", "claude-sub", "cursor"], help="Harness to use (auto-detect if not specified). claude-sub uses subscription (no API key)")
+    parser.add_argument("--harness", choices=["aider", "codex", "codex-sub", "claude-code", "claude-sub", "cursor"], help="Harness to use (auto-detect if not specified). *-sub variants use subscription (no API key)")
     parser.add_argument("--workers", type=int, default=4, help="Parallel workers")
     parser.add_argument("--timeout", type=int, default=300, help="Per-task timeout")
     parser.add_argument("--max-iterations", type=int, default=10, help="Max iterations per task")
@@ -277,6 +287,7 @@ def main():
     harness_map = {
         "claude-code": "claude",
         "claude-sub": "claude-sub",
+        "codex-sub": "codex-sub",
     }
     harness_arg = harness_map.get(args.harness, args.harness)
     bridge_class = get_bridge_class(args.model, harness_arg)
@@ -286,6 +297,22 @@ def main():
     print(f"Harness: {harness_id}")
     print(f"Workers: {args.workers}, Timeout: {args.timeout}s, Max iterations: {args.max_iterations}")
     print(f"Tasks: {len(tasks_to_run)}")
+
+    # Pre-flight: check DDS shared memory health
+    try:
+        from harness_bench.evaluation import check_dds_shmem
+        shmem = check_dds_shmem()
+        if shmem.get("cleanup"):
+            cr = shmem["cleanup"]
+            print(f"DDS shmem: cleaned {cr['segments_before']} -> {cr['segments_after']} segments "
+                  f"(killed {len(cr['processes_killed'])} orphaned processes)")
+        if not shmem["ok"]:
+            print("=" * 60)
+            print(shmem["warning"])
+            print("=" * 60)
+    except ImportError:
+        pass
+
     print("-" * 60)
 
     results = []
