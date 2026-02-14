@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import shutil
 import subprocess
 import uuid
@@ -13,6 +14,28 @@ from ..core.protocol import CURRENT_PROTOCOL_VERSION
 
 if TYPE_CHECKING:
     from .task import Task
+
+# Pattern for safe workspace path components: alphanumeric, dots, hyphens, underscores
+_SAFE_TOKEN_RE = re.compile(r"^[A-Za-z0-9._-]+$")
+
+
+def _validate_path_component(value: str, name: str) -> None:
+    """Validate that a string is safe to use as a path component.
+
+    Args:
+        value: The string to validate
+        name: Name of the parameter (for error messages)
+
+    Raises:
+        ValueError: If the value contains unsafe characters
+    """
+    if not value:
+        raise ValueError(f"{name} must not be empty")
+    if not _SAFE_TOKEN_RE.match(value):
+        raise ValueError(
+            f"{name} contains invalid characters: {value!r}. "
+            f"Only alphanumeric characters, dots, hyphens, and underscores are allowed."
+        )
 
 
 class WorkspaceManager:
@@ -53,9 +76,23 @@ class WorkspaceManager:
         if run_id is None:
             run_id = f"run_{uuid.uuid4().hex[:8]}"
 
+        # Validate all path components to prevent directory traversal
+        _validate_path_component(task.config.id, "task_id")
+        _validate_path_component(harness_id, "harness_id")
+        _validate_path_component(run_id, "run_id")
+
         # Create workspace directory
         workspace_name = f"{task.config.id}_{harness_id}_{run_id}"
         workspace = self.base_dir / workspace_name
+
+        # Defense-in-depth: verify resolved path is within base_dir
+        resolved = workspace.resolve()
+        base_resolved = self.base_dir.resolve()
+        if not resolved.is_relative_to(base_resolved):
+            raise ValueError(
+                f"Workspace path {resolved} escapes base directory {base_resolved}"
+            )
+
         workspace.mkdir(parents=True, exist_ok=True)
 
         # Initialize git
