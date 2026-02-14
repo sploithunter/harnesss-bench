@@ -320,21 +320,161 @@ class Evaluator:
     ) -> VerificationResult:
         """Run reference comparison verification.
 
+        Runs both the reference implementation and the candidate solution,
+        then compares their stdout outputs.
+
         Args:
-            config: Verification configuration from task.yaml
+            config: Verification configuration from task.yaml containing:
+                - reference: Path to reference implementation script
+                - entry_point: Path to candidate script to test
+                - expected_output: Path to file with expected output (alternative to reference)
+                - timeout_seconds: Execution timeout (default 60)
 
         Returns:
             VerificationResult
         """
-        # This is a placeholder - actual implementation would:
-        # 1. Run the generated code
-        # 2. Run the reference implementation
-        # 3. Compare outputs
+        reference_path = config.get("reference")
+        entry_point = config.get("entry_point")
+        expected_output_path = config.get("expected_output")
+        timeout = config.get("timeout_seconds", 60)
+
+        # We need either a reference or expected_output to compare against
+        if not reference_path and not expected_output_path:
+            return VerificationResult(
+                method="reference_comparison",
+                success=False,
+                score=0.0,
+                details={"error": "No reference or expected_output specified in verification config"},
+            )
+
+        # We need an entry_point to know what candidate to run
+        if not entry_point:
+            return VerificationResult(
+                method="reference_comparison",
+                success=False,
+                score=0.0,
+                details={"error": "No entry_point specified in verification config"},
+            )
+
+        candidate_file = self.workspace / entry_point
+        if not candidate_file.exists():
+            return VerificationResult(
+                method="reference_comparison",
+                success=False,
+                score=0.0,
+                details={"error": f"Candidate file not found: {entry_point}"},
+            )
+
+        # Get expected output - either from file or by running reference
+        expected_output = None
+
+        if expected_output_path:
+            output_file = self.workspace / expected_output_path
+            if not output_file.exists():
+                return VerificationResult(
+                    method="reference_comparison",
+                    success=False,
+                    score=0.0,
+                    details={"error": f"Expected output file not found: {expected_output_path}"},
+                )
+            expected_output = output_file.read_text().strip()
+        elif reference_path:
+            reference_file = self.workspace / reference_path
+            if not reference_file.exists():
+                return VerificationResult(
+                    method="reference_comparison",
+                    success=False,
+                    score=0.0,
+                    details={"error": f"Reference implementation not found: {reference_path}"},
+                )
+
+            try:
+                ref_proc = subprocess.run(
+                    ["python", str(reference_file)],
+                    cwd=self.workspace,
+                    capture_output=True,
+                    text=True,
+                    timeout=timeout,
+                )
+            except subprocess.TimeoutExpired:
+                return VerificationResult(
+                    method="reference_comparison",
+                    success=False,
+                    score=0.0,
+                    details={"error": f"Reference implementation timed out after {timeout}s"},
+                )
+            except Exception as e:
+                return VerificationResult(
+                    method="reference_comparison",
+                    success=False,
+                    score=0.0,
+                    details={"error": f"Error running reference: {e}"},
+                )
+
+            if ref_proc.returncode != 0:
+                return VerificationResult(
+                    method="reference_comparison",
+                    success=False,
+                    score=0.0,
+                    details={
+                        "error": "Reference implementation failed",
+                        "exit_code": ref_proc.returncode,
+                        "stderr": ref_proc.stderr[:1000] if ref_proc.stderr else None,
+                    },
+                )
+
+            expected_output = ref_proc.stdout.strip()
+
+        # Run candidate implementation
+        try:
+            cand_proc = subprocess.run(
+                ["python", str(candidate_file)],
+                cwd=self.workspace,
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+            )
+        except subprocess.TimeoutExpired:
+            return VerificationResult(
+                method="reference_comparison",
+                success=False,
+                score=0.0,
+                details={"error": f"Candidate timed out after {timeout}s"},
+            )
+        except Exception as e:
+            return VerificationResult(
+                method="reference_comparison",
+                success=False,
+                score=0.0,
+                details={"error": f"Error running candidate: {e}"},
+            )
+
+        if cand_proc.returncode != 0:
+            return VerificationResult(
+                method="reference_comparison",
+                success=False,
+                score=0.0,
+                details={
+                    "error": "Candidate implementation failed",
+                    "exit_code": cand_proc.returncode,
+                    "stderr": cand_proc.stderr[:1000] if cand_proc.stderr else None,
+                },
+            )
+
+        actual_output = cand_proc.stdout.strip()
+
+        # Compare outputs
+        success = expected_output == actual_output
+
         return VerificationResult(
             method="reference_comparison",
-            success=True,
-            score=1.0,
-            details={"message": "Reference comparison not yet implemented"},
+            success=success,
+            score=1.0 if success else 0.0,
+            details={
+                "expected_output": expected_output[:1000] if expected_output else None,
+                "actual_output": actual_output[:1000] if actual_output else None,
+                "match": success,
+            },
         )
 
     def _run_verification_script(self, script: str) -> VerificationResult:
