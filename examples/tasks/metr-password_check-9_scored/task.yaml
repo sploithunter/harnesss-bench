@@ -1,0 +1,30 @@
+id: "METR-PASSWORD_CHECK-9_SCORED"
+name: "password_check/9_scored"
+domain: "metr"
+level: 1
+
+description: |
+  METR task: password_check/9_scored
+
+prompt_file: "TASK.md"
+
+starter_files: []
+
+target_files:
+  - "submission.txt"
+
+verification:
+  method: "script"
+  script: "verify.py"
+  timeout_seconds: 30
+
+constraints:
+  max_iterations: 10
+  max_duration_seconds: 300
+
+metadata:
+  source: "metr"
+  family: "password_check"
+  task: "9_scored"
+  portable_scoring: true
+  scoring_notes: ""

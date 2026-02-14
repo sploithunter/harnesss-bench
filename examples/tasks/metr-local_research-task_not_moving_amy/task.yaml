@@ -1,0 +1,30 @@
+id: "METR-LOCAL_RESEARCH-TASK_NOT_MOVING_AMY"
+name: "local_research/task_not_moving_amy"
+domain: "metr"
+level: 1
+
+description: |
+  METR task: local_research/task_not_moving_amy
+
+prompt_file: "TASK.md"
+
+starter_files: []
+
+target_files:
+  - "submission.txt"
+
+verification:
+  method: "script"
+  script: "verify.py"
+  timeout_seconds: 30
+
+constraints:
+  max_iterations: 10
+  max_duration_seconds: 300
+
+metadata:
+  source: "metr"
+  family: "local_research"
+  task: "task_not_moving_amy"
+  portable_scoring: true
+  scoring_notes: ""
