@@ -13,6 +13,8 @@ import sys
 import time
 from pathlib import Path
 
+from harness_bench.evaluation import check_dds_shmem
+
 
 def verify(workspace: str = None) -> dict:
     """Verify the C ContentFilteredTopic subscriber implementation."""
@@ -28,6 +30,17 @@ def verify(workspace: str = None) -> dict:
         "details": {}
     }
     checkpoints = []
+
+    # Check DDS shared memory health (auto-cleans orphaned segments)
+    shmem = check_dds_shmem()
+    if shmem.get("cleanup"):
+        results["details"]["dds_shmem_cleanup"] = shmem["cleanup"]
+    if not shmem["ok"]:
+        results["message"] = shmem["warning"]
+        results["details"]["dds_shmem"] = shmem
+        checkpoints.append({"name": "dds_shmem", "passed": False, "details": shmem})
+        results["details"]["checkpoints"] = checkpoints
+        return results
 
     # Check required files
     required_files = ["SensorReading.idl", "subscriber.c", "CMakeLists.txt"]

@@ -188,12 +188,16 @@ class Evaluator:
         Returns:
             Branch name or None if not found
         """
-        # List all branches
-        proc = self._git("branch", "-a", "--format=%(refname:short)")
-        branches = proc.stdout.strip().split("\n")
-
-        # Filter harness branches
-        harness_branches = [b for b in branches if b.startswith("harness/")]
+        # List branches sorted by most recent commit date (descending)
+        proc = self._git(
+            "for-each-ref",
+            "--sort=-committerdate",
+            "--format=%(refname:short)",
+            "refs/heads/harness/",
+        )
+        harness_branches = [
+            b for b in proc.stdout.strip().split("\n") if b
+        ]
 
         if not harness_branches:
             return None
@@ -204,9 +208,8 @@ class Evaluator:
             if matching:
                 harness_branches = matching
 
-        # Return most recent (last created)
-        # In practice, there should typically be just one
-        return harness_branches[-1] if harness_branches else None
+        # Return most recent by commit date (first in sorted list)
+        return harness_branches[0] if harness_branches else None
 
     def _extract_metrics(self, branch: str) -> RunMetrics:
         """Extract metrics from git history.
