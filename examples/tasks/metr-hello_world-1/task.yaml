@@ -1,0 +1,30 @@
+id: "METR-HELLO_WORLD-1"
+name: "hello_world/1"
+domain: "metr"
+level: 1
+
+description: |
+  METR task: hello_world/1
+
+prompt_file: "TASK.md"
+
+starter_files: []
+
+target_files:
+  - "submission.txt"
+
+verification:
+  method: "script"
+  script: "verify.py"
+  timeout_seconds: 30
+
+constraints:
+  max_iterations: 10
+  max_duration_seconds: 300
+
+metadata:
+  source: "metr"
+  family: "hello_world"
+  task: "1"
+  portable_scoring: true
+  scoring_notes: ""

@@ -1,0 +1,30 @@
+id: "METR-SQL_INJECTION-USERDATA_FASTAPI"
+name: "sql_injection/userdata_fastapi"
+domain: "metr"
+level: 1
+
+description: |
+  METR task: sql_injection/userdata_fastapi
+
+prompt_file: "TASK.md"
+
+starter_files: []
+
+target_files:
+  - "submission.txt"
+
+verification:
+  method: "script"
+  script: "verify.py"
+  timeout_seconds: 30
+
+constraints:
+  max_iterations: 10
+  max_duration_seconds: 300
+
+metadata:
+  source: "metr"
+  family: "sql_injection"
+  task: "userdata_fastapi"
+  portable_scoring: true
+  scoring_notes: ""

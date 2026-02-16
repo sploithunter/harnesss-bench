@@ -56,3 +56,6 @@ Thumbs.db
 .env
 *.key
 credentials.json
+
+# METR vendor repos (external)
+vendor/

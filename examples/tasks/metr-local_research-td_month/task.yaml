@@ -1,0 +1,30 @@
+id: "METR-LOCAL_RESEARCH-TD_MONTH"
+name: "local_research/td_month"
+domain: "metr"
+level: 1
+
+description: |
+  METR task: local_research/td_month
+
+prompt_file: "TASK.md"
+
+starter_files: []
+
+target_files:
+  - "submission.txt"
+
+verification:
+  method: "script"
+  script: "verify.py"
+  timeout_seconds: 30
+
+constraints:
+  max_iterations: 10
+  max_duration_seconds: 300
+
+metadata:
+  source: "metr"
+  family: "local_research"
+  task: "td_month"
+  portable_scoring: true
+  scoring_notes: ""

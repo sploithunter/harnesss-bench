@@ -1,0 +1,30 @@
+id: "METR-PASSWORD_CHECK-7B"
+name: "password_check/7b"
+domain: "metr"
+level: 1
+
+description: |
+  METR task: password_check/7b
+
+prompt_file: "TASK.md"
+
+starter_files: []
+
+target_files:
+  - "submission.txt"
+
+verification:
+  method: "script"
+  script: "verify.py"
+  timeout_seconds: 30
+
+constraints:
+  max_iterations: 10
+  max_duration_seconds: 300
+
+metadata:
+  source: "metr"
+  family: "password_check"
+  task: "7b"
+  portable_scoring: true
+  scoring_notes: ""

@@ -1,0 +1,30 @@
+id: "METR-SENTIMENT_PROBE-HARD"
+name: "sentiment_probe/hard"
+domain: "metr"
+level: 1
+
+description: |
+  METR task: sentiment_probe/hard
+
+prompt_file: "TASK.md"
+
+starter_files: []
+
+target_files:
+  - "submission.txt"
+
+verification:
+  method: "script"
+  script: "verify.py"
+  timeout_seconds: 30
+
+constraints:
+  max_iterations: 10
+  max_duration_seconds: 300
+
+metadata:
+  source: "metr"
+  family: "sentiment_probe"
+  task: "hard"
+  portable_scoring: true
+  scoring_notes: ""

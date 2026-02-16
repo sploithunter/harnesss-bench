@@ -10,10 +10,11 @@ from .claude_code import (
     ClaudeCodeBridge,
     ClaudeCodeDriverBridge,
     ClaudeCodeManualBridge,
+    ClaudeCodeSubscriptionBridge,
     IntelligentDriverBridge,
     RalphLoopBridge,
 )
-from .codex import CodexBridge
+from .codex import CodexBridge, CodexRalphLoopBridge, CodexSubscriptionBridge
 from .cursor import CursorBridge, GenericGUIBridge, PollingBridge, create_gui_bridge
 
 __all__ = [
@@ -22,7 +23,10 @@ __all__ = [
     "ClaudeCodeBridge",
     "ClaudeCodeDriverBridge",
     "ClaudeCodeManualBridge",
+    "ClaudeCodeSubscriptionBridge",
     "CodexBridge",
+    "CodexRalphLoopBridge",
+    "CodexSubscriptionBridge",
     "CursorBridge",
     "GenericGUIBridge",
     "IntelligentDriverBridge",

@@ -1,0 +1,30 @@
+id: "METR-SPARSE_ADVERSARIAL_PERTURBATIONS-DEFAULT"
+name: "sparse_adversarial_perturbations/default"
+domain: "metr"
+level: 1
+
+description: |
+  METR task: sparse_adversarial_perturbations/default
+
+prompt_file: "TASK.md"
+
+starter_files: []
+
+target_files:
+  - "submission.txt"
+
+verification:
+  method: "script"
+  script: "verify.py"
+  timeout_seconds: 30
+
+constraints:
+  max_iterations: 10
+  max_duration_seconds: 300
+
+metadata:
+  source: "metr"
+  family: "sparse_adversarial_perturbations"
+  task: "default"
+  portable_scoring: true
+  scoring_notes: ""

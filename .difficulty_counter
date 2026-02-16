@@ -1,0 +1,40 @@
+TASK_ID: SESSION_SUMMARY - UPDATED
+EDITS: 0
+WEB_SEARCHES: 0
+USER_ASSISTS: 0
+TOTAL: 0
+
+=== TEST DESIGN PRINCIPLE ===
+FAIR TO SHARE:
+- Data models (IDL, XML type definitions)
+- Root library imports (rti.connextdds)
+- What the output should look like
+
+NOT FAIR TO SHARE:
+- API code patterns
+- How to create entities (Requester, DataReader, etc.)
+- QoS setup code
+- WaitSet patterns
+- Any code that models can copy-paste
+
+=== LR-01 RPC TEST RESULTS ===
+Before (with code examples):
+- 1 iteration, 34s, $0.19
+- Essentially copy-paste
+
+After (without code examples):
+- 2 iterations, 207s, $0.96
+- Model had to figure out rti.rpc API
+- Failed first attempt (0/4), fixed on retry
+
+IMPROVEMENT: 6x longer, 5x more expensive, required iteration
+
+=== UPDATED TEST FILES ===
+- LR-01_dds_rpc_request_reply/TASK.md - stripped code examples
+- LN-C-01_native_c_subscriber/TASK.md - stripped CMake and C API examples
+- LN-CPP-02_native_cpp_subscriber/TASK.md - stripped CMake and C++ API examples
+
+=== NEXT STEPS ===
+1. Re-test C and C++ tasks with stripped TASK.md
+2. Consider adding IDL file as starter file (since data model is fair to share)
+3. Create more tests using this principle

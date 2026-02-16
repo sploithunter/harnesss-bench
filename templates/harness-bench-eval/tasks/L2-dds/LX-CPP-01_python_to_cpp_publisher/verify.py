@@ -26,6 +26,8 @@ import sys
 import time
 from pathlib import Path
 
+from harness_bench.evaluation import check_dds_shmem
+
 
 def verify() -> dict:
     """Run verification and return results."""
@@ -40,6 +42,17 @@ def verify() -> dict:
     }
 
     checkpoints = []
+
+    # Check DDS shared memory health (auto-cleans orphaned segments)
+    shmem = check_dds_shmem()
+    if shmem.get("cleanup"):
+        results["details"]["dds_shmem_cleanup"] = shmem["cleanup"]
+    if not shmem["ok"]:
+        results["message"] = shmem["warning"]
+        results["details"]["dds_shmem"] = shmem
+        checkpoints.append({"name": "dds_shmem", "passed": False, "details": shmem})
+        results["details"]["checkpoints"] = checkpoints
+        return results
 
     # Check required files created by model
     required_files = ["publisher.cxx", "CMakeLists.txt"]
