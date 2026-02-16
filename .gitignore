@@ -59,3 +59,4 @@ credentials.json
 
 # METR vendor repos (external)
 vendor/
+.wiz/
