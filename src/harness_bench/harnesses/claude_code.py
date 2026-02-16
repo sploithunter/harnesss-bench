@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import os
+import select
 import subprocess
 import time
 from pathlib import Path
@@ -107,19 +108,22 @@ class ClaudeCodeBridge(HarnessBridge):
                 if retcode is not None:
                     break
 
-                # Read output (non-blocking would be better but this is simpler)
-                line = process.stdout.readline() if process.stdout else ""
-                if line:
-                    output_buffer.append(line)
-                    self._process_output_line(line)
+                # Read output using select to avoid blocking on silent processes
+                if process.stdout:
+                    ready, _, _ = select.select([process.stdout], [], [], 0.1)
+                    if ready:
+                        line = process.stdout.readline()
+                        if line:
+                            output_buffer.append(line)
+                            self._process_output_line(line)
+                else:
+                    time.sleep(0.1)
 
                 # Periodically commit any changes
                 if time.time() - last_commit_time > 5:
                     if self._has_uncommitted_changes():
                         self.commit_edit("Progress update")
                         last_commit_time = time.time()
-
-                time.sleep(0.1)
 
             # Get remaining output
             stdout, stderr = process.communicate()
